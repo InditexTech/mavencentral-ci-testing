@@ -65,7 +65,7 @@ jobs:
 
       - name: Validate tool-versions content
         run: |
-          if ! grep -Pq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+\-]+$' code/.tool-versions || grep -Pq '[^a-zA-Z0-9 ._+\-]' code/.tool-versions; then
+          if grep -Evq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+-]+$' code/.tool-versions; then
             echo "::error::Invalid .tool-versions content detected"
             exit 1
           fi
