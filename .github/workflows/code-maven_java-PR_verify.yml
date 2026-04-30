@@ -76,24 +76,11 @@ jobs:
           echo "app-name=$(yq -oy '.project.artifactId' code/pom.xml)" >> "$GITHUB_OUTPUT"
           echo "github-repository=$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)" >> "$GITHUB_OUTPUT"
 
-      - name: Import GPG key
-        env:
-          GPG_SECRET_KEY: ${{ secrets.CI_GPG_SECRET_KEY }}
-          GPG_KEY_PASSWORD: ${{ secrets.CI_GPG_SECRET_KEY_PASSWORD }}
-        run: |
-          echo "$GPG_SECRET_KEY" | gpg --batch --import
-          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
-          gpgconf --reload gpg-agent
-
       - name: Maven / Verify artifact with coverage
         if: ${{ !(contains(github.event.pull_request.labels.*.name, 'autopublish/snapshot-binaries')) }}
         working-directory: code
-        env:
-          GPG_KEY_ID: ${{ secrets.CI_GPG_KEY_ID }}
-          MAVEN_GPG_PASSPHRASE: ${{ secrets.CI_GPG_SECRET_KEY_PASSWORD }}
         run: |
-          mvn -B clean verify -Djacoco.skip=false -DskipITs -DfailIfNoTests=false -Dmaven.test.failure.ignore=false \
-            -Dgpg.keyname="$GPG_KEY_ID" -DskipEnforceSnapshots=true
+          mvn -B clean verify -Djacoco.skip=false -DskipITs -DfailIfNoTests=false -Dmaven.test.failure.ignore=false -DskipEnforceSnapshots=true
 
       - name: Maven / Process Surefire report and annotate PR
         if: ${{ always() && !cancelled() }}
