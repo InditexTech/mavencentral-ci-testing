@@ -29,33 +29,37 @@ jobs:
       github.event.comment.body == '/publish-snapshot'
     runs-on: ubuntu-24.04
     steps:
-      - name: Validate admin permissions and pin PR SHA
-        id: validate
+      - name: Validate admin permissions
         uses: actions/github-script@v7
         with:
           script: |
-            const { data: permData } = await github.rest.repos.getCollaboratorPermissionLevel({
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
               owner: context.repo.owner,
               repo: context.repo.repo,
               username: context.actor
             });
-            const permission = permData.permission;
+            const permission = data.permission;
             core.info(`User permission level: ${permission}`);
             if (permission !== 'admin') {
               core.setFailed(`User @${context.actor} is not a repository admin.`);
-              return;
             }
-            const { data: prData } = await github.rest.pulls.get({
+
+      - name: Get PR head SHA
+        id: pr-head
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number
             });
-            core.setOutput('pr_head_sha', prData.head.sha);
+            core.setOutput('sha', data.head.sha);
 
       - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.validate.outputs.pr_head_sha }}
+          ref: ${{ steps.pr-head.outputs.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -77,12 +81,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-asdf-
 
-      - name: Save tool-versions content
+      - name: Validate tool-versions content
         run: |
           if ! grep -Pq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+\-]+$' code/.tool-versions || grep -Pq '[^a-zA-Z0-9 ._+\-]' code/.tool-versions; then
             echo "::error::Invalid .tool-versions content detected"
             exit 1
           fi
+
+      - name: Save tool-versions content
+        run: |
           {
             echo "TOOL_VERSIONS<<EOF"
             cat code/.tool-versions
@@ -202,12 +209,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-asdf-
 
-      - name: Save tool-versions content
+      - name: Validate tool-versions content
         run: |
           if ! grep -Pq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+\-]+$' code/.tool-versions || grep -Pq '[^a-zA-Z0-9 ._+\-]' code/.tool-versions; then
             echo "::error::Invalid .tool-versions content detected"
             exit 1
           fi
+
+      - name: Save tool-versions content
+        run: |
           {
             echo "TOOL_VERSIONS<<EOF"
             cat code/.tool-versions
