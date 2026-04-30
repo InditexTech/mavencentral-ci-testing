@@ -24,6 +24,8 @@ env:
 jobs:
   unit-tests:
     name: SonarCloud / Unit Tests
+    permissions:
+      contents: read
     timeout-minutes: 30
     if: ${{ ((github.event.pull_request.merged == true && (vars.DEVELOPMENT_FLOW != 'trunk-based-development' && (github.base_ref == 'develop' || startsWith(github.base_ref, 'develop-'))) ||
         (vars.DEVELOPMENT_FLOW == 'trunk-based-development' && (github.base_ref == 'main' || startsWith(github.base_ref, 'main-')))) ||
@@ -57,6 +59,10 @@ jobs:
 
       - name: Save tool-versions content
         run: |
+          if ! grep -Pq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+\-]+$' code/.tool-versions || grep -Pq '[^a-zA-Z0-9 ._+\-]' code/.tool-versions; then
+            echo "::error::Invalid .tool-versions content detected"
+            exit 1
+          fi
           {
             echo "TOOL_VERSIONS<<EOF"
             cat code/.tool-versions

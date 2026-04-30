@@ -33,6 +33,9 @@ env:
 jobs:
   release:
     name: Release
+    permissions:
+      contents: write
+      pull-requests: write
     if: github.event_name == 'workflow_dispatch'
       || (github.event.pull_request.merged == true && !contains(join(github.event.pull_request.labels.*.name, ', '), 'skip-release')
       && (contains(join(github.event.pull_request.labels.*.name, ', '), 'release-type')
@@ -93,6 +96,10 @@ jobs:
 
       - name: Save tool-versions content
         run: |
+          if ! grep -Pq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+\-]+$' code/.tool-versions || grep -Pq '[^a-zA-Z0-9 ._+\-]' code/.tool-versions; then
+            echo "::error::Invalid .tool-versions content detected"
+            exit 1
+          fi
           {
             echo "TOOL_VERSIONS<<EOF"
             cat code/.tool-versions
