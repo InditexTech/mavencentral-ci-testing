@@ -57,12 +57,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-asdf-
 
-      - name: Save tool-versions content
+      - name: Validate tool-versions content
         run: |
           if ! grep -Pq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+\-]+$' code/.tool-versions || grep -Pq '[^a-zA-Z0-9 ._+\-]' code/.tool-versions; then
             echo "::error::Invalid .tool-versions content detected"
             exit 1
           fi
+
+      - name: Save tool-versions content
+        run: |
           {
             echo "TOOL_VERSIONS<<EOF"
             cat code/.tool-versions
