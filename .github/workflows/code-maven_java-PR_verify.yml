@@ -90,10 +90,10 @@ jobs:
         working-directory: code
         env:
           GPG_KEY_ID: ${{ secrets.CI_GPG_KEY_ID }}
-          GPG_PASSPHRASE: ${{ secrets.CI_GPG_SECRET_KEY_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.CI_GPG_SECRET_KEY_PASSWORD }}
         run: |
           mvn -B clean verify -Djacoco.skip=false -DskipITs -DfailIfNoTests=false -Dmaven.test.failure.ignore=false \
-            -Dgpg.keyname="$GPG_KEY_ID" -Dgpg.passphrase="$GPG_PASSPHRASE" -DskipEnforceSnapshots=true
+            -Dgpg.keyname="$GPG_KEY_ID" -DskipEnforceSnapshots=true
 
       - name: Maven / Process Surefire report and annotate PR
         if: ${{ always() && !cancelled() }}
@@ -116,9 +116,12 @@ jobs:
         if: ${{ vars.IS_INDITEXTECH_REPO == 'true' }}
         working-directory: code
         run: |
-          asdf local java ${{ env.SONAR_JAVA_VERSION }}
-          asdf local nodejs 20.10.0
-          asdf local maven 3.9.4
+          cat > .tool-versions <<VERSIONS
+          java ${{ env.SONAR_JAVA_VERSION }}
+          nodejs 20.10.0
+          maven 3.9.4
+          VERSIONS
+          asdf reshim
 
       - name: Setup Java environment vars
         if: ${{ vars.IS_INDITEXTECH_REPO == 'true' }}
