@@ -16,6 +16,9 @@ env:
 jobs:
   check-changes-in-paths:
     name: Check for changes in corresponding paths
+    permissions:
+      contents: read
+      pull-requests: read
     runs-on: ubuntu-24.04
     if: ${{ github.event.pull_request.draft == false || contains(join(github.event.pull_request.labels.*.name, ', '), 'release-type') || contains(join(github.event.pull_request.labels.*.name, ', '), 'release-preview') }}
     outputs:
