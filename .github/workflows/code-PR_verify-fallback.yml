@@ -8,6 +8,7 @@ jobs:
   unit-tests:
     if: 'false'
     name: Code / Verify
+    permissions: {}
     runs-on: ubuntu-24.04
     steps:
       - run: 'echo "No Code / Verify required"'
