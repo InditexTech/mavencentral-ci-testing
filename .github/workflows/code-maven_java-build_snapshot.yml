@@ -143,7 +143,7 @@ jobs:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.CI_GPG_SECRET_KEY_PASSWORD }}
         working-directory: code
         run: |
-          mvn -B clean install gpg:sign org.sonatype.central:central-publishing-maven-plugin:publish -DskipTests -DskipUTs -DskipITs -DskipEnforceSnapshots=true -Dbuild.type=snapshot --settings=.mvn/settings.xml
+          mvn -B clean install gpg:sign deploy:deploy -DskipTests -DskipUTs -DskipITs -DskipEnforceSnapshots=true --settings=.mvn/settings.xml
 
       - name: Comment on PR with result
         if: always()
@@ -272,7 +272,7 @@ jobs:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.CI_GPG_SECRET_KEY_PASSWORD }}
         working-directory: code
         run: |
-          mvn -B clean install gpg:sign org.sonatype.central:central-publishing-maven-plugin:publish -DskipTests -DskipUTs -DskipITs -DskipEnforceSnapshots=true -Dbuild.type=snapshot --settings=.mvn/settings.xml
+          mvn -B clean install gpg:sign deploy:deploy -DskipTests -DskipUTs -DskipITs -DskipEnforceSnapshots=true --settings=.mvn/settings.xml
           SNAPSHOT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           echo "SNAPSHOT_VERSION=$SNAPSHOT_VERSION" >> "$GITHUB_ENV"
 
