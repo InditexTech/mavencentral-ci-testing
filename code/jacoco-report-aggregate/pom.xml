@@ -14,6 +14,10 @@
   <name>jacoco-report-aggregate</name>
   <description>Aggregated JaCoCo coverage report</description>
 
+  <properties>
+    <maven.deploy.skip>true</maven.deploy.skip>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>dev.inditex</groupId>
