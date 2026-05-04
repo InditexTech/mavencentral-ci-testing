@@ -30,7 +30,7 @@
 
   <scm>
     <connection>scm:git:git://github.com/InditexTech/mavencentral-ci-testing.git</connection>
-    <developerConnection>scm:git:ssh://github.com:InditexTech/mavencentral-ci-testing.git</developerConnection>
+    <developerConnection>scm:git:https://github.com/InditexTech/mavencentral-ci-testing.git</developerConnection>
     <url>https://github.com/InditexTech/mavencentral-ci-testing/tree/main</url>
     <tag>HEAD</tag>
   </scm>
