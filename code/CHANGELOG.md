@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.1] - 2026-05-04
 
+### Changed
+
+- Enabled automatic publishing in central-publishing-maven-plugin for releases
+
+## [0.1.1] - 2026-05-04
+
+### Fixed
+
+- Fixed SCM developerConnection URL in pom.xml to use HTTPS for maven-release-plugin compatibility
+
 ## [0.1.0] - 2026-05-04
 
 ### Added
@@ -35,7 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed 403 Forbidden error when publishing snapshots to Maven Central Portal
 - Configured distributionManagement for Maven Central snapshot repository
 - Excluded jacoco-report-aggregate module from deployment
-- Fixed SCM developerConnection URL in pom.xml to use HTTPS for maven-release-plugin compatibility
 
 [Unreleased]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.1.1...HEAD
 
