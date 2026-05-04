@@ -150,8 +150,16 @@ jobs:
           GROUP_ID=$(mvn help:evaluate -Dexpression=project.groupId -q -DforceStdout)
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
 
+          # Get deployed artifact IDs (excluding parent pom and modules with maven.deploy.skip)
+          ARTIFACTS=$(find . -name "pom.xml" -type f -exec grep -l "<packaging>jar</packaging>" {} \; | \
+            xargs -I {} dirname {} | \
+            xargs -I {} sh -c 'cd {} && mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout' | \
+            grep -v "jacoco-report-aggregate" | \
+            tr '\n' ',' | sed 's/,$//')
+
           echo "GROUP_ID=$GROUP_ID" >> "$GITHUB_OUTPUT"
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "ARTIFACTS=$ARTIFACTS" >> "$GITHUB_OUTPUT"
 
       - name: Comment on PR with result
         if: always()
@@ -159,17 +167,20 @@ jobs:
         env:
           GROUP_ID: ${{ steps.deploy.outputs.GROUP_ID }}
           VERSION: ${{ steps.deploy.outputs.VERSION }}
+          ARTIFACTS: ${{ steps.deploy.outputs.ARTIFACTS }}
         with:
           script: |
             const status = '${{ job.status }}';
             const groupId = process.env.GROUP_ID || 'dev.inditex';
             const version = process.env.VERSION || '0.0.0-SNAPSHOT';
+            const artifacts = process.env.ARTIFACTS || '';
 
             let body;
             if (status === 'success') {
-              body = `### :rocket: Snapshot published: \`${groupId}:*:${version}\`
+              const artifactList = artifacts.split(',').map(a => `- \`${groupId}:${a}:${version}\``).join('\n');
+              body = `### :rocket: Snapshot published
 
-            Artifacts are available in Maven Central snapshots repository.`;
+            ${artifactList}`;
             } else {
               const workflowUrl = `${context.payload.repository.html_url}/actions/runs/${context.runId}`;
               body = `### :x: Snapshot publication failed
@@ -300,8 +311,16 @@ jobs:
           GROUP_ID=$(mvn help:evaluate -Dexpression=project.groupId -q -DforceStdout)
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
 
+          # Get deployed artifact IDs (excluding parent pom and modules with maven.deploy.skip)
+          ARTIFACTS=$(find . -name "pom.xml" -type f -exec grep -l "<packaging>jar</packaging>" {} \; | \
+            xargs -I {} dirname {} | \
+            xargs -I {} sh -c 'cd {} && mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout' | \
+            grep -v "jacoco-report-aggregate" | \
+            tr '\n' ',' | sed 's/,$//')
+
           echo "GROUP_ID=$GROUP_ID" >> "$GITHUB_ENV"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "ARTIFACTS=$ARTIFACTS" >> "$GITHUB_ENV"
 
       - name: Write Job Summary
         if: always()
@@ -310,10 +329,17 @@ jobs:
         run: |
           if [[ "${{ job.status }}" == "success" ]]; then
             cat >> "$GITHUB_STEP_SUMMARY" <<EOF
-          ### :rocket: Snapshot published: \`${GROUP_ID}:*:${VERSION}\`
+          ### :rocket: Snapshot published
+
+          EOF
+            # List each artifact
+            IFS=',' read -ra ARTIFACT_ARRAY <<< "$ARTIFACTS"
+            for artifact in "${ARTIFACT_ARRAY[@]}"; do
+              echo "- \`${GROUP_ID}:${artifact}:${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
+            done
+            cat >> "$GITHUB_STEP_SUMMARY" <<EOF
 
           - **Branch:** \`$BASELINE\`
-          - **Repository:** Maven Central snapshots
           EOF
           else
             cat >> "$GITHUB_STEP_SUMMARY" <<EOF
