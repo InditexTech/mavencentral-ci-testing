@@ -9,6 +9,11 @@
       <password>${env.MAVEN_CENTRAL_PASSWORD}</password>
     </server>
     <server>
+      <id>ossrh</id>
+      <username>${env.MAVEN_CENTRAL_USERNAME}</username>
+      <password>${env.MAVEN_CENTRAL_PASSWORD}</password>
+    </server>
+    <server>
       <id>gpg.passphrase</id>
       <passphrase>${env.MAVEN_GPG_PASSPHRASE}</passphrase>
     </server>
