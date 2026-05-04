@@ -21,7 +21,31 @@ This workflow relies on asdf to automatically load any tool version defined on t
 
 ## Jobs
 
-- ### `build-and-promote`
+- ### `publish-snapshot-from-pr`
+
+  Publishes a snapshot version from a pull request when triggered by the `/publish-snapshot` comment.
 
   - **Steps**
-    - `mvn verify`
+    - Validates admin permissions
+    - Checks out PR branch
+    - Sets up caches and asdf environment
+    - Configures GPG and Git
+    - Runs `mvn deploy` to publish snapshot to OSSRH
+
+- ### `publish-snapshot-from-dispatch`
+
+  Publishes a snapshot version from a branch when manually triggered.
+
+  - **Steps**
+    - Validates admin permissions
+    - Checks out specified branch
+    - Sets up caches and asdf environment
+    - Configures GPG and Git
+    - Runs `mvn deploy` to publish snapshot to OSSRH
+    - Writes job summary with version information
+
+## Configuration
+
+Snapshots are published to **OSSRH** (OSS Repository Hosting) at `https://s01.oss.sonatype.org/content/repositories/snapshots`.
+
+**Note**: Maven Central's `central-publishing-maven-plugin` does not support snapshot deployments. Snapshots use the traditional `maven-deploy-plugin` with OSSRH repository configuration.
