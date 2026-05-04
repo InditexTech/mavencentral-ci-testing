@@ -1,0 +1,24 @@
+version = 1
+SPDX-PackageName = "mavencentral-ci-testing"
+SPDX-PackageSupplier = "2025 INDUSTRIA DE DISEÑO TEXTIL S.A. (INDITEX S.A.)"
+SPDX-PackageDownloadLocation = "https://github.com/InditexTech/mavencentral-ci-testing"
+
+[[annotations]]
+path = [
+    "repolinter.json",
+    "NOTICE",
+    ".gitignore",
+    ".github/CODEOWNERS",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    ".github/ISSUE_TEMPLATE/**",
+    ".github/workflows/**",
+    "README.md",
+    "code/.mvn/**",
+    "code/.tool-versions",
+    "code/CHANGELOG.md",
+    "code/pom.xml",
+    "code/**/pom.xml",
+    "code/**/src/**",
+]
+SPDX-FileCopyrightText = "2025 INDUSTRIA DE DISEÑO TEXTIL S.A. (INDITEX S.A.)"
+SPDX-License-Identifier = "Apache-2.0"
