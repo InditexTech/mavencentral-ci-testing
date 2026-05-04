@@ -52,4 +52,19 @@ class StringUtilsTest {
     void isPalindromeReturnsFalseForEmpty() {
         assertFalse(StringUtils.isPalindrome(""));
     }
+
+    @Test
+    void isEmptyReturnsTrueForNull() {
+        assertTrue(StringUtils.isEmpty(null));
+    }
+
+    @Test
+    void isEmptyReturnsTrueForEmptyString() {
+        assertTrue(StringUtils.isEmpty(""));
+    }
+
+    @Test
+    void isEmptyReturnsFalseForNonEmptyString() {
+        assertFalse(StringUtils.isEmpty("test"));
+    }
 }
