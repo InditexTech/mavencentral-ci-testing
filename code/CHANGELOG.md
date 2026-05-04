@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-05-04
+
 ### Added
 
 - Initial project structure with multi-module Maven setup
@@ -31,3 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed 403 Forbidden error when publishing snapshots to Maven Central Portal
 - Configured distributionManagement for Maven Central snapshot repository
 - Excluded jacoco-report-aggregate module from deployment
+
+[Unreleased]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.1.0...HEAD
+
+[0.1.0]: https://github.com/InditexTech/mavencentral-ci-testing/releases/tag/0.1.0
