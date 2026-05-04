@@ -146,13 +146,11 @@ jobs:
         run: |
           mvn -B clean deploy -DskipTests -DskipUTs -DskipITs -DskipEnforceSnapshots=true --settings=.mvn/settings.xml
 
-          # Extract group ID, artifact ID, and version
+          # Extract project info
           GROUP_ID=$(mvn help:evaluate -Dexpression=project.groupId -q -DforceStdout)
-          ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout)
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
 
           echo "GROUP_ID=$GROUP_ID" >> "$GITHUB_OUTPUT"
-          echo "ARTIFACT_ID=$ARTIFACT_ID" >> "$GITHUB_OUTPUT"
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Comment on PR with result
@@ -160,23 +158,18 @@ jobs:
         uses: actions/github-script@v7
         env:
           GROUP_ID: ${{ steps.deploy.outputs.GROUP_ID }}
-          ARTIFACT_ID: ${{ steps.deploy.outputs.ARTIFACT_ID }}
           VERSION: ${{ steps.deploy.outputs.VERSION }}
         with:
           script: |
             const status = '${{ job.status }}';
             const groupId = process.env.GROUP_ID || 'dev.inditex';
-            const artifactId = process.env.ARTIFACT_ID || 'unknown';
             const version = process.env.VERSION || '0.0.0-SNAPSHOT';
-            const groupPath = groupId.replace(/\./g, '/');
 
             let body;
             if (status === 'success') {
-              const baseUrl = `https://central.sonatype.com/repository/maven-snapshots/${groupPath}/${artifactId}/${version}`;
-              body = `### :rocket: Snapshot published: \`${groupId}:${artifactId}:${version}\`
+              body = `### :rocket: Snapshot published: \`${groupId}:*:${version}\`
 
-            - [Browse artifacts](${baseUrl}/)
-            - [maven-metadata.xml](${baseUrl}/maven-metadata.xml)`;
+            Artifacts are available in Maven Central snapshots repository.`;
             } else {
               const workflowUrl = `${context.payload.repository.html_url}/actions/runs/${context.runId}`;
               body = `### :x: Snapshot publication failed
@@ -305,11 +298,9 @@ jobs:
           mvn -B clean deploy -DskipTests -DskipUTs -DskipITs -DskipEnforceSnapshots=true --settings=.mvn/settings.xml
 
           GROUP_ID=$(mvn help:evaluate -Dexpression=project.groupId -q -DforceStdout)
-          ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout)
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
 
           echo "GROUP_ID=$GROUP_ID" >> "$GITHUB_ENV"
-          echo "ARTIFACT_ID=$ARTIFACT_ID" >> "$GITHUB_ENV"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Write Job Summary
@@ -317,16 +308,12 @@ jobs:
         env:
           BASELINE: ${{ github.event.inputs.BASELINE }}
         run: |
-          GROUP_PATH=$(echo "$GROUP_ID" | tr '.' '/')
-          BASE_URL="https://central.sonatype.com/repository/maven-snapshots/${GROUP_PATH}/${ARTIFACT_ID}/${VERSION}"
-
           if [[ "${{ job.status }}" == "success" ]]; then
             cat >> "$GITHUB_STEP_SUMMARY" <<EOF
-          ### :rocket: Snapshot published: \`${GROUP_ID}:${ARTIFACT_ID}:${VERSION}\`
+          ### :rocket: Snapshot published: \`${GROUP_ID}:*:${VERSION}\`
 
           - **Branch:** \`$BASELINE\`
-          - [Browse artifacts](${BASE_URL}/)
-          - [maven-metadata.xml](${BASE_URL}/maven-metadata.xml)
+          - **Repository:** Maven Central snapshots
           EOF
           else
             cat >> "$GITHUB_STEP_SUMMARY" <<EOF
