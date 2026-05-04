@@ -25,4 +25,8 @@ public final class StringUtils {
         String normalized = input.toLowerCase().replaceAll("\\s+", "");
         return normalized.equals(reverse(normalized));
     }
+
+    public static boolean isEmpty(String input) {
+        return input == null || input.isEmpty();
+    }
 }
