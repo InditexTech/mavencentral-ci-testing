@@ -137,6 +137,7 @@ jobs:
           git config tag.gpgsign true
 
       - name: Build & Deploy Snapshot
+        id: deploy
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
@@ -145,15 +146,44 @@ jobs:
         run: |
           mvn -B clean deploy -DskipTests -DskipUTs -DskipITs -DskipEnforceSnapshots=true --settings=.mvn/settings.xml
 
+          # Extract group ID, artifact ID, and version
+          GROUP_ID=$(mvn help:evaluate -Dexpression=project.groupId -q -DforceStdout)
+          ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout)
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+
+          echo "GROUP_ID=$GROUP_ID" >> "$GITHUB_OUTPUT"
+          echo "ARTIFACT_ID=$ARTIFACT_ID" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Comment on PR with result
         if: always()
         uses: actions/github-script@v7
+        env:
+          GROUP_ID: ${{ steps.deploy.outputs.GROUP_ID }}
+          ARTIFACT_ID: ${{ steps.deploy.outputs.ARTIFACT_ID }}
+          VERSION: ${{ steps.deploy.outputs.VERSION }}
         with:
           script: |
             const status = '${{ job.status }}';
-            const body = status === 'success'
-              ? '### :rocket: Maven snapshot published successfully'
-              : '### :x: Maven snapshot publication failed\n\nPlease check the workflow logs for details.';
+            const groupId = process.env.GROUP_ID || 'dev.inditex';
+            const artifactId = process.env.ARTIFACT_ID || 'unknown';
+            const version = process.env.VERSION || '0.0.0-SNAPSHOT';
+            const groupPath = groupId.replace(/\./g, '/');
+
+            let body;
+            if (status === 'success') {
+              const baseUrl = `https://central.sonatype.com/repository/maven-snapshots/${groupPath}/${artifactId}/${version}`;
+              body = `### :rocket: Snapshot published: \`${groupId}:${artifactId}:${version}\`
+
+            - [Browse artifacts](${baseUrl}/)
+            - [maven-metadata.xml](${baseUrl}/maven-metadata.xml)`;
+            } else {
+              const workflowUrl = `${context.payload.repository.html_url}/actions/runs/${context.runId}`;
+              body = `### :x: Snapshot publication failed
+
+            [View workflow logs](${workflowUrl}) for details.`;
+            }
+
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -273,22 +303,37 @@ jobs:
         working-directory: code
         run: |
           mvn -B clean deploy -DskipTests -DskipUTs -DskipITs -DskipEnforceSnapshots=true --settings=.mvn/settings.xml
-          SNAPSHOT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          echo "SNAPSHOT_VERSION=$SNAPSHOT_VERSION" >> "$GITHUB_ENV"
+
+          GROUP_ID=$(mvn help:evaluate -Dexpression=project.groupId -q -DforceStdout)
+          ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout)
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+
+          echo "GROUP_ID=$GROUP_ID" >> "$GITHUB_ENV"
+          echo "ARTIFACT_ID=$ARTIFACT_ID" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Write Job Summary
         if: always()
         env:
           BASELINE: ${{ github.event.inputs.BASELINE }}
         run: |
+          GROUP_PATH=$(echo "$GROUP_ID" | tr '.' '/')
+          BASE_URL="https://central.sonatype.com/repository/maven-snapshots/${GROUP_PATH}/${ARTIFACT_ID}/${VERSION}"
+
           if [[ "${{ job.status }}" == "success" ]]; then
-            echo "### :rocket: Maven snapshot published" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "- **Branch:** \`$BASELINE\`" >> "$GITHUB_STEP_SUMMARY"
-            echo "- **Version:** \`${{ env.SNAPSHOT_VERSION }}\`" >> "$GITHUB_STEP_SUMMARY"
+            cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ### :rocket: Snapshot published: \`${GROUP_ID}:${ARTIFACT_ID}:${VERSION}\`
+
+          - **Branch:** \`$BASELINE\`
+          - [Browse artifacts](${BASE_URL}/)
+          - [maven-metadata.xml](${BASE_URL}/maven-metadata.xml)
+          EOF
           else
-            echo "### :x: Maven snapshot publication failed" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "- **Branch:** \`$BASELINE\`" >> "$GITHUB_STEP_SUMMARY"
-            echo "Please check the workflow logs for details." >> "$GITHUB_STEP_SUMMARY"
+            cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ### :x: Snapshot publication failed
+
+          - **Branch:** \`$BASELINE\`
+
+          Check the workflow logs above for error details.
+          EOF
           fi
