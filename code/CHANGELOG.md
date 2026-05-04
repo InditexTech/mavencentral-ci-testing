@@ -31,3 +31,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed 403 Forbidden error when publishing snapshots to Maven Central Portal
 - Configured distributionManagement for Maven Central snapshot repository
 - Excluded jacoco-report-aggregate module from deployment
+- Fixed SCM developerConnection URL in pom.xml to use HTTPS for maven-release-plugin compatibility
