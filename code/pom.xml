@@ -35,6 +35,13 @@
     <tag>HEAD</tag>
   </scm>
 
+  <distributionManagement>
+    <snapshotRepository>
+      <id>central</id>
+      <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+    </snapshotRepository>
+  </distributionManagement>
+
   <modules>
     <module>mavencentral-ci-testing-core</module>
     <module>jacoco-report-aggregate</module>
