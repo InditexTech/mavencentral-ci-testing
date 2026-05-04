@@ -4,7 +4,7 @@
 
   <groupId>dev.inditex</groupId>
   <artifactId>mavencentral-ci-testing</artifactId>
-  <version>0.1.2-SNAPSHOT</version>
+  <version>0.2.1-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>mavencentral-ci-testing</name>
