@@ -1,0 +1,9 @@
+{
+  "project_type": "single",
+  "release": {
+    "lifecycle": "delegated",
+    "snapshot_publish": true
+  },
+  "schema_version": 1,
+  "working_directory": "code"
+}

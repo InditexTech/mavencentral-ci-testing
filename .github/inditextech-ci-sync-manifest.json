@@ -1,0 +1,36 @@
+{
+  "configuration": {
+    "development_flow": "git-flow",
+    "outputs": [
+      "gh-release",
+      "publish"
+    ],
+    "parameters": {
+      "project_type": "single",
+      "release": {
+        "lifecycle": "delegated",
+        "snapshot_publish": true
+      },
+      "working_directory": "code"
+    }
+  },
+  "creation_year": 2026,
+  "integrity": {
+    "algorithm": "hmac-sha256",
+    "signature": "2dc79fa8779309f6065b784272ae6811a313a777c0ba5ccec344d205e51eb2bf"
+  },
+  "managed_by": "InditexTech CI governance",
+  "managed_paths": {
+    ".github/inditextech-ci-java.json": "0d4f90cc9084617f7cecad0373cb63518c5fc2294c505b4a9ccd3f7642489b37",
+    ".github/workflows/code-maven_java-release-core.yml": "4655c01ed22350d5aa723f070be883837b77d97a8785cca0fc0a21b209e0eb7d",
+    ".github/workflows/codeql.yml": "c754f9c9aac95d54084cb449c53ba3b4f1a81dd9a6a35fa729da8f3f5f93ba79",
+    ".github/workflows/sync-to-develop.yml": "9eb4278deb6be51157152068ccd5f1ee91866943ae9225fb9d8512aaacc88708"
+  },
+  "profile": "java",
+  "repository_id": 1225608612,
+  "schema_version": 2,
+  "source_digests": {
+    "base": "dfce735d3e5d9c4420aea3fc8722fdd9808a1a290cf0dbddc1af613400054a0a",
+    "java": "98e35c957efed185c29107ba3fdd6d917eed9a5028a1fa1b067c0ce955cd2550"
+  }
+}
