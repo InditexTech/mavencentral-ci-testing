@@ -141,7 +141,7 @@
           </execution>
           <execution>
             <id>enforce-snapshots</id>
-            <phase>validate</phase>
+            <phase>deploy</phase>
             <goals>
               <goal>enforce</goal>
             </goals>
