@@ -1,18 +1,1 @@
 # One normalized relative path per line. Lines in this file are not reconciled by InditexTech CI governance.
-.github/ISSUE_TEMPLATE/1-bug.yml
-.github/ISSUE_TEMPLATE/2-feature.yml
-.github/ISSUE_TEMPLATE/3-other.yml
-.github/ISSUE_TEMPLATE/config.yml
-.github/PULL_REQUEST_TEMPLATE.md
-.github/workflows/code-maven_java-PR_verify.yml
-.github/workflows/code-maven_java-build_snapshot.yml
-.github/workflows/code-maven_java-release.yml
-.github/workflows/code-maven_java-sonarcloud-analysis.yml
-.github/workflows/code-release_preview.yml
-.github/workflows/pr-verify.yml
-.github/workflows/push-verify.yml
-CODE_OF_CONDUCT.md
-CONTRIBUTING.md
-SECURITY.md
-code/.tool-versions
-repolinter.json
