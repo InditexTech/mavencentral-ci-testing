@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-02
+
 ### Changed
 
 - Validated the governed Java CI/CD lifecycle end-to-end on the canary consumer:
@@ -49,7 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configured distributionManagement for Maven Central snapshot repository
 - Excluded jacoco-report-aggregate module from deployment
 
-[Unreleased]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.0...HEAD
+[Unreleased]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.1...HEAD
+
+[0.2.1]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.0...0.2.1
 
 [0.2.0]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.1.1...0.2.0
 
