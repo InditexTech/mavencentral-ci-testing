@@ -17,20 +17,37 @@
   "creation_year": 2026,
   "integrity": {
     "algorithm": "hmac-sha256",
-    "signature": "2dc79fa8779309f6065b784272ae6811a313a777c0ba5ccec344d205e51eb2bf"
+    "signature": "2f470870e2e72fd5e74355f93b8f2c1a7b99db974a1196ce2952d1d8f3b8c186"
   },
   "managed_by": "InditexTech CI governance",
   "managed_paths": {
+    ".github/ISSUE_TEMPLATE/1-bug.yml": "cd4dad3f32fe707e06324790a2fe2c25829c55566de2b459d744e785b36e1205",
+    ".github/ISSUE_TEMPLATE/2-feature.yml": "ebb92730d6c01641d055f97ac094cbe07f88fac24be9b689ddf26e47e7bda863",
+    ".github/ISSUE_TEMPLATE/3-other.yml": "5a839b39a98704036210dee498146f51bd5a6c057228685680e02004ff063a9a",
+    ".github/ISSUE_TEMPLATE/config.yml": "10e5dee4d49aa9e7792ceb4c986160c61f95da1ba00a64bf06e5f1f636cd17ec",
+    ".github/PULL_REQUEST_TEMPLATE.md": "23a0b0ac79a9020ccac9c013582a01f86e2df2ae7f914673583b9a3368313041",
     ".github/inditextech-ci-java.json": "0d4f90cc9084617f7cecad0373cb63518c5fc2294c505b4a9ccd3f7642489b37",
+    ".github/workflows/code-maven_java-PR_verify.yml": "f8cbad09b09a656f11f9e7c1dc63408c3628b7a8b09c8cfbe507f6d8ff75a64a",
+    ".github/workflows/code-maven_java-build_snapshot.yml": "38d0a5388b40b390855176f67a5de316808486b1a4a75f676f014b1cd9950ace",
     ".github/workflows/code-maven_java-release-core.yml": "4655c01ed22350d5aa723f070be883837b77d97a8785cca0fc0a21b209e0eb7d",
+    ".github/workflows/code-maven_java-release.yml": "186c3efb820a6b4e8a9674fe73c3183e5243ef7f20ace70facd89a617096ba6d",
+    ".github/workflows/code-maven_java-sonarcloud-analysis.yml": "19787196d6fa3733d1219b66fd6a612d4988514943cbfc8db19b919725ba19d1",
+    ".github/workflows/code-release_preview.yml": "29e62adb0825098095a3c9ed77593dbf190e5bb233b9c2f52748011ecd31d0c0",
     ".github/workflows/codeql.yml": "c754f9c9aac95d54084cb449c53ba3b4f1a81dd9a6a35fa729da8f3f5f93ba79",
-    ".github/workflows/sync-to-develop.yml": "9eb4278deb6be51157152068ccd5f1ee91866943ae9225fb9d8512aaacc88708"
+    ".github/workflows/pr-verify.yml": "f52295fbfe81578c0a6459d8b384be569933ac78d32fff370932a8dec6943e46",
+    ".github/workflows/push-verify.yml": "217097070d0fdef329eae1a7187806a4623d692ce467ca8f1f9a7f56dddb29ed",
+    ".github/workflows/sync-to-develop.yml": "9eb4278deb6be51157152068ccd5f1ee91866943ae9225fb9d8512aaacc88708",
+    "CODE_OF_CONDUCT.md": "ce1e7a8f68a7917d48c03f9f7aae5529367f73af0e959276e889d33ea1e8d4ab",
+    "CONTRIBUTING.md": "4e1264ca54a45df44b362c7533f0eba912bfa77b6f561121ae9e5e9d6aa00df3",
+    "SECURITY.md": "0ee7a3356bc3a1c7649e3b7a6a9012b0608011be2b1ff8d106ad02c8950bab25",
+    "code/.tool-versions": "85df00ed5674e7c41af00dab24ac2123d7ceda14db5389197157cb1c58aea536",
+    "repolinter.json": "0efb305c47a63f03c488a34906fc2d5471c84145c2ff553f2aacf3a41b92e1a1"
   },
   "profile": "java",
   "repository_id": 1225608612,
   "schema_version": 2,
   "source_digests": {
-    "base": "dfce735d3e5d9c4420aea3fc8722fdd9808a1a290cf0dbddc1af613400054a0a",
-    "java": "98e35c957efed185c29107ba3fdd6d917eed9a5028a1fa1b067c0ce955cd2550"
+    "base": "8af88664d64bb62e112d3039ad780df69cc04f0b3fb5090fd12c8e72d8dab553",
+    "java": "e1722f4a5b3227992d4a42360348e132c334d08ccd906907c6b5d308cf2758bf"
   }
 }
