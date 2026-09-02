@@ -140,17 +140,19 @@
             </configuration>
           </execution>
           <execution>
-            <id>enforce-no-snapshots</id>
+            <id>enforce-snapshots</id>
+            <phase>validate</phase>
             <goals>
               <goal>enforce</goal>
             </goals>
             <configuration>
-              <rules>
-                <requireReleaseDeps>
-                  <message>No SNAPSHOT dependencies allowed in releases</message>
-                </requireReleaseDeps>
-              </rules>
               <skip>${skipEnforceSnapshots}</skip>
+              <rules>
+                <requireSnapshotVersion>
+                  <failWhenParentIsRelease>false</failWhenParentIsRelease>
+                  <message>Final versions not allowed</message>
+                </requireSnapshotVersion>
+              </rules>
             </configuration>
           </execution>
         </executions>
@@ -214,6 +216,7 @@
           <autoVersionSubmodules>true</autoVersionSubmodules>
           <pushChanges>true</pushChanges>
           <scmCommentPrefix>[release]</scmCommentPrefix>
+          <arguments>-DskipEnforceSnapshots</arguments>
         </configuration>
       </plugin>
 
