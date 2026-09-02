@@ -1,0 +1,217 @@
+# SPDX-FileCopyrightText: 2026 INDUSTRIA DE DISEÑO TEXTIL S.A. (INDITEX S.A.)
+# SPDX-License-Identifier: Apache-2.0
+
+name: code-release-preview
+
+on:
+  pull_request:
+    types: [labeled, synchronize, ready_for_review, opened, reopened]
+    branches: [main, main-*, develop, develop-*]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: code-release-preview-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  PROJECT_TYPE: ${{ vars.PROJECT_TYPE }}
+  WORKING_DIRECTORY: ${{ vars.WORKING_DIRECTORY }}
+  ASDF_BRANCH_VERSION: '0.18.0'
+
+jobs:
+  release-preview:
+    name: Release Preview
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (
+        (vars.DEVELOPMENT_FLOW == 'trunk-based-development' && (github.event.pull_request.base.ref == 'main' || startsWith(github.event.pull_request.base.ref, 'main-'))) ||
+        (vars.DEVELOPMENT_FLOW == 'git-flow' && (github.event.pull_request.base.ref == 'main' || startsWith(github.event.pull_request.base.ref, 'main-')))
+      )
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write # Publishes the calculated release preview.
+    steps:
+      - name: Check out pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up workflow Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '25.0.2+10.0.LTS'
+          cache: maven
+          cache-dependency-path: ${{ env.WORKING_DIRECTORY }}/**/pom.xml
+
+      - name: Read governed tool versions
+        id: tool-versions
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Reject any .tool-versions line that is not a strict "<plugin> <version>" before asdf reads it.
+          if grep -Evq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+-]+$' .tool-versions; then
+            echo "::error title=Invalid tool-versions::${WORKING_DIRECTORY}/.tool-versions is malformed."
+            exit 1
+          fi
+          {
+            echo "tool_versions<<EOF"
+            cat .tool-versions
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up asdf-managed Java
+        uses: asdf-vm/actions/install@1902764435ca0dd2f3388eea723a4f92a4eb8302 # v4.0.0
+        with:
+          tool_versions: ${{ steps.tool-versions.outputs.tool_versions }}
+          asdf_version: ${{ env.ASDF_BRANCH_VERSION }}
+
+      - name: Resolve build JDK from .tool-versions
+        id: jdk
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # asdf installs the .tool-versions JDK but does not export it. Emit it as
+          # a step output so the Maven version read below runs on the consumer JDK,
+          # mirroring release-core; every other workflow step keeps the pinned
+          # Java 25 set up above.
+          echo "java_home=$(asdf where java)" >> "$GITHUB_OUTPUT"
+
+      - name: Check CHANGELOG has Unreleased changes
+        # Skip for PRs that opt out of a release (skip-release label) and for the
+        # engine's automated reconcile PR, which never carries release content.
+        if: >-
+          !contains(github.event.pull_request.labels.*.name, 'skip-release') &&
+          github.event.pull_request.head.ref != 'automated/ci-governance-sync'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_EVENT_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet "origin/$BASE_REF"...HEAD -- CHANGELOG.md; then
+            echo "::error title=No CHANGELOG changes::Update the Unreleased section with this release's changes."
+            gh pr comment "$GITHUB_EVENT_NUMBER" --repo "$GITHUB_REPOSITORY" --body $'### :x: No changes in `CHANGELOG.md`\nUpdate the `## [Unreleased]` section listing the changes for this release before merging.'
+            exit 1
+          fi
+
+      - name: Calculate release preview
+        env:
+          JAVA_HOME: ${{ steps.jdk.outputs.java_home }}
+          DEVELOPMENT_FLOW: ${{ vars.DEVELOPMENT_FLOW }}
+          GITHUB_EVENT_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ",$RELEASE_LABELS," == *",skip-release,"* ]]; then
+            body=$'### Release Preview\n\nThis pull request has the `skip-release` label and will not create a Java release.'
+            gh pr comment "$GITHUB_EVENT_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              --body "$body"
+            exit 0
+          fi
+
+          case ",$RELEASE_LABELS," in
+            *",release-type/major,"*) release_bump="major" ;;
+            *",release-type/minor,"*) release_bump="minor" ;;
+            *",release-type/hotfix,"*|*",release-type/multi-hotfix,"*|*",release-type/patch,"*)
+              release_bump="patch"
+              ;;
+            *)
+              if [[ "$DEVELOPMENT_FLOW" == "trunk-based-development" ]]; then
+                release_bump="minor"
+              else
+                body=$'### Release Preview\n\nAdd a `release-type/...` label to calculate a release for this git-flow pull request.'
+                gh pr comment "$GITHUB_EVENT_NUMBER" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --body "$body"
+                exit 0
+              fi
+              ;;
+          esac
+
+          merge_strategy="Create a merge commit"
+          if [[ "$DEVELOPMENT_FLOW" == "trunk-based-development" ]]; then
+            merge_strategy="Squash and merge"
+          fi
+
+          # --- Maven version helpers (mirror release-core) -------------------
+          # The release version is the strip-SNAPSHOT of each unit's own POM
+          # version; the release-type label only drives the NEXT-development bump.
+          artifact_id() {
+            printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
+          }
+          strip_snapshot() { printf '%s' "${1%-SNAPSHOT}"; }
+          read_version() {
+            local pom="pom.xml"
+            [[ -n "$1" ]] && pom="$1/pom.xml"
+            mvn -q -B --no-transfer-progress -f "$pom" \
+              help:evaluate -Dexpression=project.version -DforceStdout
+          }
+          bump_semver() {  # <X.Y.Z> <major|minor|patch>
+            local major minor patch
+            IFS=. read -r major minor patch <<< "$1"
+            case "$2" in
+              major) major=$((major + 1)); minor=0; patch=0 ;;
+              minor) minor=$((minor + 1)); patch=0 ;;
+              patch) patch=$((patch + 1)) ;;
+            esac
+            printf '%s.%s.%s' "$major" "$minor" "$patch"
+          }
+          # -------------------------------------------------------------------
+
+          if [[ "$PROJECT_TYPE" == "single" ]]; then
+            current_version="$(read_version "")"
+            release_version="$(strip_snapshot "$current_version")"
+            next_dev="$(bump_semver "$release_version" "$release_bump")-SNAPSHOT"
+            versions="$(printf '%s\n' \
+              "- Current version: \`$current_version\`" \
+              "- Proposed release version: \`$release_version\`" \
+              "- Next development version: \`$next_dev\`")"
+          elif [[ "$PROJECT_TYPE" == "monorepo" ]]; then
+            descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
+            release_strategy="$(jq -r '.release.strategy' "$descriptor")"
+            versions="- Reactor release strategy: \`$release_strategy\`"
+            while IFS= read -r package; do
+              artifact="$(artifact_id "$package")"
+              current_version="$(read_version "$artifact")"
+              release_version="$(strip_snapshot "$current_version")"
+              next_dev="$(bump_semver "$release_version" "$release_bump")-SNAPSHOT"
+              versions+=$'\n'"- \`$artifact\`: \`$current_version\` -> \`$release_version\` (next dev: \`$next_dev\`)"
+            done < <(jq -r '.release.packages[]' "$descriptor")
+          else
+            echo "::error title=Invalid project type::PROJECT_TYPE must be single or monorepo."
+            exit 1
+          fi
+
+          changes="$(awk '
+            BEGIN { capture=0 }
+            /^## \[[Uu]nreleased\]/ { capture=1; next }
+            capture && /^## \[/ { capture=0 }
+            capture { print }
+          ' CHANGELOG.md)"
+
+          body="$(printf "%s\n\n%s\n- Release type: \`%s\`\n- Expected merge strategy: **%s**\n\n#### Changes\n%s" \
+            '### Java Release Preview' \
+            "$versions" \
+            "$release_bump" \
+            "$merge_strategy" \
+            "$changes")"
+          gh pr comment "$GITHUB_EVENT_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --body "$body"

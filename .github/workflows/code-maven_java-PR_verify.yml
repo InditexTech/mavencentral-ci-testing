@@ -1,0 +1,98 @@
+# SPDX-FileCopyrightText: 2026 INDUSTRIA DE DISEÑO TEXTIL S.A. (INDITEX S.A.)
+# SPDX-License-Identifier: Apache-2.0
+
+name: code-maven-java-PR-verify
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: code-maven-java-pr-verify-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  PROJECT_TYPE: ${{ vars.PROJECT_TYPE }}
+  WORKING_DIRECTORY: ${{ vars.WORKING_DIRECTORY }}
+  ASDF_BRANCH_VERSION: '0.18.0'
+
+jobs:
+  verify:
+    name: Code / Verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up workflow Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '25.0.2+10.0.LTS'
+          cache: maven
+          cache-dependency-path: ${{ env.WORKING_DIRECTORY }}/**/pom.xml
+
+      - name: Read governed tool versions
+        id: tool-versions
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Reject any .tool-versions line that is not a strict "<plugin> <version>" before asdf reads it.
+          if grep -Evq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+-]+$' .tool-versions; then
+            echo "::error title=Invalid tool-versions::${WORKING_DIRECTORY}/.tool-versions is malformed."
+            exit 1
+          fi
+          {
+            echo "tool_versions<<EOF"
+            cat .tool-versions
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up asdf-managed Java
+        uses: asdf-vm/actions/install@1902764435ca0dd2f3388eea723a4f92a4eb8302 # v4.0.0
+        with:
+          tool_versions: ${{ steps.tool-versions.outputs.tool_versions }}
+          asdf_version: ${{ env.ASDF_BRANCH_VERSION }}
+
+      - name: Resolve build JDK from .tool-versions
+        id: jdk
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # asdf installs the .tool-versions JDK but does not export it. Emit it as
+          # a step output so ONLY the Maven build runs on the consumer JDK; every
+          # other workflow step keeps the pinned Java 25 set up above.
+          echo "java_home=$(asdf where java)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify, test, and build
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        shell: bash
+        env:
+          JAVA_HOME: ${{ steps.jdk.outputs.java_home }}
+        run: |
+          set -euo pipefail
+          # The Maven reactor rooted at ${WORKING_DIRECTORY} builds the single
+          # module or every monorepo member in one invocation; `verify` runs the
+          # full lifecycle (compile, unit + integration tests, JaCoCo, enforcer).
+          case "$PROJECT_TYPE" in
+            single)
+              mvn -B --no-transfer-progress -f pom.xml clean verify
+              ;;
+            monorepo)
+              mvn -B --no-transfer-progress -f pom.xml clean verify
+              ;;
+            *)
+              echo "::error title=Invalid project type::PROJECT_TYPE must be single or monorepo."
+              exit 1
+              ;;
+          esac
