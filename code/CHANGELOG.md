@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Delegated release lane: the Maven Central publish job now deploys the
+  already-checked-out release-tag tree directly instead of re-running
+  `release:perform` in a job that lacks `release.properties`/`-Dtag`, and
+  skips the snapshot enforcer for the final (non-SNAPSHOT) build.
+
 ## [0.2.2] - 2026-09-02
 
 ## [0.2.1] - 2026-09-02
