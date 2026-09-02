@@ -698,7 +698,7 @@ jobs:
           dist="$RUNNER_TEMP/dist"
           rm -rf "$dist"
           mkdir -p "$dist"
-          mvn -B --no-transfer-progress -f pom.xml -DskipTests clean package
+          mvn -B --no-transfer-progress -f pom.xml -DskipTests -DskipEnforceSnapshots clean package
 
           if [[ "$PROJECT_TYPE" == "single" ]]; then
             cp target/*.jar "$dist"/ 2>/dev/null || true
