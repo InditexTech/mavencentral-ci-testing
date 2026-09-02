@@ -168,10 +168,19 @@ jobs:
             printf '%s' "$CI_GPG_SECRET_KEY" | gpg --batch --import
           fi
 
+          # DEFECT-B FIX (canary-proven engine change): this publish job already
+          # checks out the exact release-tag commit (ref: release_commit). Maven's
+          # own release:perform re-checkout has NO release.properties in this job
+          # (it is written in the separate release-core job's workspace) and NO
+          # -Dtag, so -DlocalCheckout=true fails "could not perform a local
+          # checkout" (it passes the connection URL as --branch). Deploy the tag
+          # tree that is already checked out instead: gpg:sign (phase deploy) and
+          # central-publishing autoPublish (extensions, phase deploy) are both POM-
+          # bound to deploy. -DskipEnforceSnapshots because the GA (non-SNAPSHOT)
+          # version would otherwise trip the POM's enforce-snapshots@validate rule.
           mvn -B --no-transfer-progress -s "$settings" -f pom.xml \
-            release:perform -DlocalCheckout=true \
-            -DconnectionUrl="scm:git:${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" \
-            -Darguments="-DskipTests -s $settings"
+            -DskipTests -DskipEnforceSnapshots \
+            clean deploy
 
   github-release:
     name: Create GitHub Release ${{ matrix.release.tag }}
