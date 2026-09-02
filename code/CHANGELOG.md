@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Validated the governed Java CI/CD lifecycle end-to-end on the canary consumer:
+  ADOPT convergence, snapshot publishing to Maven Central Portal, and the
+  delegated git-flow release lane (release:prepare / release:perform).
+
 ## [0.2.0] - 2026-05-04
 
 ## [0.1.1] - 2026-05-04
