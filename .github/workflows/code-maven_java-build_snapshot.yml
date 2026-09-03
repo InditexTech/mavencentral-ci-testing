@@ -95,6 +95,7 @@ jobs:
           {
             echo "tool_versions<<EOF"
             cat .tool-versions
+            echo
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -211,6 +212,7 @@ jobs:
           {
             echo "tool_versions<<EOF"
             cat .tool-versions
+            echo
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
