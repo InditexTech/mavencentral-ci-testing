@@ -20,7 +20,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PROJECT_TYPE: ${{ vars.PROJECT_TYPE }}
   WORKING_DIRECTORY: ${{ vars.WORKING_DIRECTORY }}
   ASDF_BRANCH_VERSION: '0.18.0'
 
@@ -55,6 +54,25 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
+      - name: Resolve governed project type
+        shell: bash
+        run: |
+          set -euo pipefail
+          descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
+          if [[ ! -f "$descriptor" ]]; then
+            echo "::error title=Missing descriptor::.github/inditextech-ci-java.json not found."
+            exit 1
+          fi
+          project_type="$(jq -r '.project_type // empty' "$descriptor")"
+          case "$project_type" in
+            single|monorepo) ;;
+            *)
+              echo "::error title=Invalid project type::Descriptor .project_type must be single or monorepo."
+              exit 1
+              ;;
+          esac
+          echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
+
       - name: Set up workflow Java
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
@@ -92,9 +110,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # asdf installs the .tool-versions JDK but does not export it. Emit it as
-          # a step output so ONLY the Maven build runs on the consumer JDK; every
-          # other workflow step keeps the pinned Java 25 set up above.
+          # Emit the asdf JDK as a step output so only the Maven build uses the consumer JDK; other steps keep the pinned Java 25.
           echo "java_home=$(asdf where java)" >> "$GITHUB_OUTPUT"
 
       - name: Verify snapshot candidate
@@ -106,18 +122,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Snapshot deploy is opt-in per descriptor (`release.snapshot_publish`,
-          # default off). Absent/false leaves the reactor verified but never
-          # deployed — correct for products without a snapshot repository.
+          # Snapshot deploy is opt-in per descriptor (release.snapshot_publish, default off); absent/false = verified but not deployed.
           descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
           snapshot_optin="$(jq -r '.release.snapshot_publish // false' "$descriptor")"
 
           publish_snapshot=false
           if [[ "$snapshot_optin" == "true" && "$GITHUB_EVENT_NAME" == "push" ]]; then
-            # Skip the redundant snapshot produced by the release's own commits.
-            # Key on the release-bot committer identity (App `<slug>[bot]`), not
-            # the commit subject, so it holds under both govern-inject and
-            # delegated (where maven-release-plugin owns the commit wording).
+            # Skip the redundant snapshot from release-bot commits; key on the <slug>[bot] committer (not subject) so it holds for govern-inject + delegated.
             committer_email="$(git -C "$GITHUB_WORKSPACE" show -s --format=%ae HEAD)"
             if [[ "$committer_email" == *"[bot]@users.noreply.github.com" ]]; then
               echo "::notice title=Snapshot skipped::Release-bot commit does not need a snapshot."
@@ -127,10 +138,7 @@ jobs:
           fi
           echo "publish_snapshot=$publish_snapshot" >> "$GITHUB_OUTPUT"
 
-          # A snapshot candidate is always verified (the push/PR CI gate). The
-          # published version is the POM's own `-SNAPSHOT`; the Central Portal
-          # snapshot repository timestamps each deploy, so no version munging is
-          # required (unlike Python's `.devN`).
+          # Always verify the snapshot candidate; the published version is the POM's -SNAPSHOT (Portal timestamps each deploy; no version munging).
           case "$PROJECT_TYPE" in
             single|monorepo)
               mvn -B --no-transfer-progress -f pom.xml clean verify
@@ -162,6 +170,25 @@ jobs:
           persist-credentials: false
           ref: ${{ github.sha }}
 
+      - name: Resolve governed project type
+        shell: bash
+        run: |
+          set -euo pipefail
+          descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
+          if [[ ! -f "$descriptor" ]]; then
+            echo "::error title=Missing descriptor::.github/inditextech-ci-java.json not found."
+            exit 1
+          fi
+          project_type="$(jq -r '.project_type // empty' "$descriptor")"
+          case "$project_type" in
+            single|monorepo) ;;
+            *)
+              echo "::error title=Invalid project type::Descriptor .project_type must be single or monorepo."
+              exit 1
+              ;;
+          esac
+          echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
+
       - name: Set up workflow Java
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
@@ -199,9 +226,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # asdf installs the .tool-versions JDK but does not export it. Emit it as
-          # a step output so ONLY the Maven build runs on the consumer JDK; every
-          # other workflow step keeps the pinned Java 25 set up above.
+          # Emit the asdf JDK as a step output so only the Maven build uses the consumer JDK; other steps keep the pinned Java 25.
           echo "java_home=$(asdf where java)" >> "$GITHUB_OUTPUT"
 
       - name: Resolve publishable modules
@@ -210,16 +235,12 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$PROJECT_TYPE" != "monorepo" ]]; then
-            # A single reactor deploys as a whole; the composite rejects a
-            # populated `packages` for a single project.
+            # A single reactor deploys as a whole; the composite rejects a populated packages for single.
             echo "packages=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # artifact_id mirrors the adapter's _artifact_id(): descriptor package
-          # names are raw; the reactor addresses each module by its slug, which is
-          # also the flat module directory name. jacoco-report-aggregate is never
-          # a descriptor package, so it is never deployed.
+          # artifact_id mirrors the adapter's _artifact_id(): map raw descriptor package names to the reactor's module slug (= flat dir name).
           artifact_id() {
             printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
           }
@@ -240,6 +261,6 @@ jobs:
         uses: InditexTech/gh-actions/maven-central@7138f88b2fa8e90318bcb4bf5f9ce6c147b13d2f # v1.0.0
         with:
           working-directory: ${{ vars.WORKING_DIRECTORY }}
-          project-type: ${{ vars.PROJECT_TYPE }}
+          project-type: ${{ env.PROJECT_TYPE }}
           packages: ${{ steps.modules.outputs.packages }}
           auto-publish: 'false'
