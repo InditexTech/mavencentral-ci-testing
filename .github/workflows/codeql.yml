@@ -21,13 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Code scanning is free on public repositories but requires a GitHub Code
-  # Security (Advanced Security) seat on private and internal ones. Running the
-  # analysis where no seat exists fails hard with "Advanced Security must be
-  # enabled for this repository". This job resolves availability at runtime so
-  # the analysis skips cleanly (green) instead of failing where it is not
-  # licensed — and starts running automatically the moment a repository becomes
-  # public or gains a seat, with no configuration change.
+  # Code scanning needs an Advanced Security seat on private/internal repos; this job resolves availability at runtime so it skips cleanly (green) where unlicensed and auto-runs when public/seated.
   scanning-availability:
     name: Resolve code scanning availability
     if: >-
@@ -58,16 +52,11 @@ jobs:
         id: resolve
         env:
           GH_TOKEN: ${{ github.token }}
-          # Manual opt-in for a private or internal repository that already has
-          # a Code Security seat but whose seat status the workflow token cannot
-          # read (that field is only returned to admin tokens). Set the
-          # repository variable CODE_SCANNING_ENABLED to 'true' to force the
-          # analysis on there. Public repositories never need it.
+          # Set var CODE_SCANNING_ENABLED=true to force analysis on a private/internal repo whose seat status the workflow token can't read.
           FORCE_ENABLED: ${{ vars.CODE_SCANNING_ENABLED }}
         run: |
           set -euo pipefail
-          # Visibility is always readable; the security-and-analysis block is
-          # only present for admin tokens, so treat a missing value as unknown.
+          # Visibility is always readable; the security-and-analysis block needs an admin token, so a missing value = unknown.
           visibility="$(gh api "/repos/${GITHUB_REPOSITORY}" --jq '.visibility' 2>/dev/null || echo unknown)"
           seat="$(gh api "/repos/${GITHUB_REPOSITORY}" \
             --jq '.security_and_analysis.advanced_security.status // "unknown"' 2>/dev/null || echo unknown)"
@@ -98,10 +87,7 @@ jobs:
         include:
           - language: actions
             build-mode: none
-          # Java is analyzed buildless (build-mode: none). CodeQL's Java
-          # extractor supports source-only analysis, so no JDK/Maven setup or
-          # reactor compilation is required here — the scan skips a costly build
-          # and stays language-parity with the rest of the archetype set.
+          # Java analyzed buildless (build-mode: none): CodeQL's Java extractor does source-only, no JDK/Maven/reactor build needed.
           - language: java
             build-mode: none
     steps:

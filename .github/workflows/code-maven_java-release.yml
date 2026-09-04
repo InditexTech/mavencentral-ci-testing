@@ -63,14 +63,31 @@ jobs:
           persist-credentials: false
           ref: ${{ needs.release-core.outputs.release_commit }}
 
+      - name: Resolve governed project type
+        shell: bash
+        run: |
+          set -euo pipefail
+          descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
+          if [[ ! -f "$descriptor" ]]; then
+            echo "::error title=Missing descriptor::.github/inditextech-ci-java.json not found."
+            exit 1
+          fi
+          project_type="$(jq -r '.project_type // empty' "$descriptor")"
+          case "$project_type" in
+            single|monorepo) ;;
+            *)
+              echo "::error title=Invalid project type::Descriptor .project_type must be single or monorepo."
+              exit 1
+              ;;
+          esac
+          echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
+
       - name: Resolve release lifecycle
         id: lifecycle
         shell: bash
         run: |
           set -euo pipefail
-          # The publisher is descriptor-selected. `govern-inject` (default) deploys
-          # through the engine's maven-central composite; `delegated` invokes the
-          # POM's own release:perform. Fail closed on any other value.
+          # Publisher is descriptor-selected: govern-inject (default) = engine maven-central composite; delegated = POM's own release. Fail closed otherwise.
           descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
           mode="$(jq -r '.release.lifecycle // "govern-inject"' "$descriptor")"
           case "$mode" in
@@ -104,6 +121,7 @@ jobs:
           {
             echo "tool_versions<<EOF"
             cat .tool-versions
+            echo
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -119,9 +137,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # asdf installs the .tool-versions JDK but does not export it. Emit it as
-          # a step output so ONLY the Maven build runs on the consumer JDK; every
-          # other workflow step keeps the pinned Java 25 set up above.
+          # Emit the asdf JDK as a step output so only the Maven build uses the consumer JDK; other steps keep the pinned Java 25.
           echo "java_home=$(asdf where java)" >> "$GITHUB_OUTPUT"
 
       - name: Deploy release to Maven Central
@@ -131,8 +147,8 @@ jobs:
         uses: InditexTech/gh-actions/maven-central@7138f88b2fa8e90318bcb4bf5f9ce6c147b13d2f # v1.0.0
         with:
           working-directory: ${{ vars.WORKING_DIRECTORY }}
-          project-type: ${{ vars.PROJECT_TYPE }}
-          packages: ${{ vars.PROJECT_TYPE == 'monorepo' && join(matrix.release.packages, ',') || '' }}
+          project-type: ${{ env.PROJECT_TYPE }}
+          packages: ${{ env.PROJECT_TYPE == 'monorepo' && join(matrix.release.packages, ',') || '' }}
           auto-publish: 'true'
 
       - name: Perform delegated release
@@ -145,12 +161,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Delegated mode: the POM owns the publisher (e.g. central-publishing) and
-          # artifact signing; the engine only invokes release:perform against the
-          # POM-owned tag. Central credentials reach Maven through settings.xml env
-          # references (no literal secret) and the release GPG key is imported for
-          # artifact signing. The exact perform/checkout/signing flags are settled
-          # by the per-repo live canary (design decision 3).
+          # Delegated: deploy the already-checked-out GA tag tree directly (POM binds central-publishing + gpg to deploy); release:perform can't rebuild the checkout cross-job. -DskipEnforceSnapshots: GA is not -SNAPSHOT.
           settings="$RUNNER_TEMP/java-central-settings.xml"
           cat > "$settings" <<'XML'
           <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
@@ -168,16 +179,6 @@ jobs:
             printf '%s' "$CI_GPG_SECRET_KEY" | gpg --batch --import
           fi
 
-          # DEFECT-B FIX (canary-proven engine change): this publish job already
-          # checks out the exact release-tag commit (ref: release_commit). Maven's
-          # own release:perform re-checkout has NO release.properties in this job
-          # (it is written in the separate release-core job's workspace) and NO
-          # -Dtag, so -DlocalCheckout=true fails "could not perform a local
-          # checkout" (it passes the connection URL as --branch). Deploy the tag
-          # tree that is already checked out instead: gpg:sign (phase deploy) and
-          # central-publishing autoPublish (extensions, phase deploy) are both POM-
-          # bound to deploy. -DskipEnforceSnapshots because the GA (non-SNAPSHOT)
-          # version would otherwise trip the POM's enforce-snapshots@validate rule.
           mvn -B --no-transfer-progress -s "$settings" -f pom.xml \
             -DskipTests -DskipEnforceSnapshots \
             clean deploy
