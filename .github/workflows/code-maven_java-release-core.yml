@@ -754,13 +754,16 @@ jobs:
           mkdir -p "$dist"
           mvn -B --no-transfer-progress -f pom.xml -DskipTests -DskipEnforceSnapshots clean package
 
-          if [[ "$PROJECT_TYPE" == "single" ]]; then
-            cp target/*.jar "$dist"/ 2>/dev/null || true
-          elif [[ "$(jq -r '.packages | length' <<< "$RELEASE")" -gt 0 ]]; then
+          if [[ "$(jq -r '.packages | length' <<< "$RELEASE")" -gt 0 ]]; then
             while IFS= read -r module; do
               cp "$module"/target/*.jar "$dist"/ 2>/dev/null || true
             done < <(jq -r '.packages[]' <<< "$RELEASE")
-          else
+          elif [[ "$PROJECT_TYPE" == "single" ]]; then
+            cp target/*.jar "$dist"/ 2>/dev/null || true
+          fi
+
+          # A single reactor deploys as a whole, so its jars may live in modules rather than at the root.
+          if ! ls "$dist"/*.jar > /dev/null 2>&1; then
             while IFS= read -r jar; do
               cp "$jar" "$dist"/ 2>/dev/null || true
             done < <(find . -type f -path '*/target/*.jar')
@@ -911,7 +914,7 @@ jobs:
           git push --atomic origin "${RELEASE_COMMIT}:${EXPECTED_REF}" "${tag_refs[@]}"
 
       - name: Next development iteration and sync PR
-        if: steps.promote.outcome == 'success' || needs.prepare-release.outputs.lifecycle_mode == 'delegated'
+        if: steps.promote.outcome == 'success' || (needs.prepare-release.outputs.lifecycle_mode == 'delegated' && (needs.build-distributions.result == 'success' || needs.build-distributions.result == 'skipped'))
         env:
           JAVA_HOME: ${{ steps.jdk.outputs.java_home }}
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Governed release lane: a single reactor now collects its jars from the whole
+  reactor instead of only the root `target/`, and a failed build no longer
+  advances the baseline to the next snapshot.
+
 ## [0.2.4] - 2026-09-04
 
 ### Changed
