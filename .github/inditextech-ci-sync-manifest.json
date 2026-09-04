@@ -17,7 +17,7 @@
   "creation_year": 2026,
   "integrity": {
     "algorithm": "hmac-sha256",
-    "signature": "982d132326239a2a193d018c6f476571528a6b6f071014aec093615ede7ea33b"
+    "signature": "37bcbe5050422d659f08cf3448ab8cf31dcb8b6cb41f64add9a76b9b3a9d7dbd"
   },
   "managed_by": "InditexTech CI governance",
   "managed_paths": {
@@ -29,10 +29,10 @@
     ".github/inditextech-ci-java.json": "0d4f90cc9084617f7cecad0373cb63518c5fc2294c505b4a9ccd3f7642489b37",
     ".github/workflows/code-maven_java-PR_verify.yml": "03f725857504a380647c7700c19c35af22c0bdd956f79c691c692d3bcc4cfb31",
     ".github/workflows/code-maven_java-build_snapshot.yml": "14b85a65723b5f986fc339c48c10cb7ad77ed1da982ca4e98f8d24c48a157f5e",
-    ".github/workflows/code-maven_java-release-core.yml": "d653732535a772b38a198afc010c591bd036fc9249dd9fbe8cd0093e284239fe",
+    ".github/workflows/code-maven_java-release-core.yml": "333fcc5ead6e04b1fe44e1235404cb573f06f0a83468144b4001737a7a5af831",
     ".github/workflows/code-maven_java-release.yml": "d7fe11ecb85caf6293f49a28a88234e96cde62188bf639d4ec428dea230d87e3",
     ".github/workflows/code-maven_java-sonarcloud-analysis.yml": "fc62671ebde1806908117e1b82e190e96eac0e4cd2d4c299a6e27c24a44d06f1",
-    ".github/workflows/code-release_preview.yml": "30376c3f6a4e4f47da3af4fb54904a45a6dd1af9aa0343add231c965a9d6b6e6",
+    ".github/workflows/code-release_preview.yml": "0c6c978043b8b9fc01b7e7d4679a6bd2c80407fc1d388e3503aedc08a76dc0cd",
     ".github/workflows/codeql.yml": "380e061a720659a77678c2626dec0b16a0bbb7c32fd72141b777eb9a390c248e",
     ".github/workflows/pr-verify.yml": "f52295fbfe81578c0a6459d8b384be569933ac78d32fff370932a8dec6943e46",
     ".github/workflows/push-verify.yml": "217097070d0fdef329eae1a7187806a4623d692ce467ca8f1f9a7f56dddb29ed",
@@ -48,6 +48,6 @@
   "schema_version": 2,
   "source_digests": {
     "base": "8af88664d64bb62e112d3039ad780df69cc04f0b3fb5090fd12c8e72d8dab553",
-    "java": "e3e38d1e10b4670cf6e1ff217061aaa7ec978e5a9df28d42c16b8bd919f315ed"
+    "java": "5d5dab327788e9c6429c805ae87b979917d4a7c918f70eb038c8ad00de630027"
   }
 }

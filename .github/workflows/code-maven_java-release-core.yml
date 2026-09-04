@@ -24,6 +24,7 @@ permissions:
 
 env:
   CI_GOVERNANCE_RELEASE_STAGING_REF: refs/ci-governance/release/${{ github.run_id }}-${{ github.run_attempt }}
+  CI_GOVERNANCE_RELEASE_TAG_STAGING_REF: refs/ci-governance/release-tag/${{ github.run_id }}-${{ github.run_attempt }}
   WORKING_DIRECTORY: ${{ vars.WORKING_DIRECTORY }}
   ASDF_BRANCH_VERSION: '0.18.0'
 
@@ -56,10 +57,12 @@ jobs:
     timeout-minutes: 30
     outputs:
       release_commit: ${{ steps.release-metadata.outputs.release_commit }}
+      promote_commit: ${{ steps.release-metadata.outputs.promote_commit }}
       releases: ${{ steps.release-metadata.outputs.releases }}
-      expected_ref: ${{ steps.release-plan.outputs.expected_ref }}
+      expected_ref: ${{ steps.release-metadata.outputs.expected_ref }}
       lifecycle_mode: ${{ steps.lifecycle.outputs.mode }}
       staging_ref: ${{ steps.release-metadata.outputs.staging_ref }}
+      staged_tag_ref: ${{ steps.release-metadata.outputs.staged_tag_ref }}
     steps:
       - name: Resolve release context
         id: release-context
@@ -612,8 +615,15 @@ jobs:
             git -C "$GITHUB_WORKSPACE" commit -m "[java-release] Consume changelog for release $RELEASE_VERSION"
           fi
 
+          # pushChanges=false: the POM-owned plugin still owns the version and the
+          # tag NAME, but the engine owns when they become visible. Left at its
+          # default, release:prepare writes both commits and the tag straight to the
+          # baseline branch from inside prepare-release -- before build-distributions
+          # exists -- so a failed build burns the version for an artifact that was
+          # never produced.
           mvn -B --no-transfer-progress -f pom.xml \
             release:clean release:prepare \
+            -DpushChanges=false \
             -DdevelopmentVersion="$NEXT_DEV" \
             -Darguments="-DskipTests"
 
@@ -628,6 +638,19 @@ jobs:
           fi
           release_tag="${new_tags[0]}"
           release_commit="$(git -C "$GITHUB_WORKSPACE" rev-list -n 1 "$release_tag")"
+          # The tip carries the next-development commit; the tag stays on the release
+          # commit. main must end at the tip, so both are staged and promoted together.
+          promote_commit="$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
+
+          # Same staging contract as the govern-inject arm (see "Commit and stage
+          # release"): the build needs these objects fetchable, and the baseline
+          # branch must not move until build-distributions has concluded.
+          git -C "$GITHUB_WORKSPACE" push --atomic --force origin \
+            "HEAD:$CI_GOVERNANCE_RELEASE_STAGING_REF" \
+            "refs/tags/$release_tag:$CI_GOVERNANCE_RELEASE_TAG_STAGING_REF"
+          # Drop the local GA-named tag: promote is the only step allowed to make that
+          # name exist, so its tag-conflict check stays meaningful on a re-run.
+          git -C "$GITHUB_WORKSPACE" tag -d "$release_tag"
 
           releases="$(jq -cn \
             --arg version "$RELEASE_VERSION" \
@@ -636,6 +659,7 @@ jobs:
             '[{packages: [], version: $version, tag: $tag, next_dev: $next_dev}]')"
           {
             echo "release_commit=$release_commit"
+            echo "promote_commit=$promote_commit"
             echo "releases<<EOF"
             printf '%s\n' "$releases"
             echo "EOF"
@@ -648,6 +672,9 @@ jobs:
           RELEASES: ${{ steps.release-plan.outputs.releases_intermediate }}
           DELEGATED_RELEASES: ${{ steps.delegated-release.outputs.releases }}
           DELEGATED_RELEASE_COMMIT: ${{ steps.delegated-release.outputs.release_commit }}
+          DELEGATED_PROMOTE_COMMIT: ${{ steps.delegated-release.outputs.promote_commit }}
+          BASELINE_BRANCH: ${{ steps.release-context.outputs.baseline_branch }}
+          PLAN_EXPECTED_REF: ${{ steps.release-plan.outputs.expected_ref }}
         working-directory: ${{ env.WORKING_DIRECTORY }}
         shell: bash
         run: |
@@ -655,13 +682,28 @@ jobs:
           if [[ "$LIFECYCLE_MODE" == "delegated" ]]; then
             release_commit="$DELEGATED_RELEASE_COMMIT"
             release_records="$DELEGATED_RELEASES"
+            # The delegated tip is the next-development commit; the tag stays behind
+            # it on the release commit. release-plan is skipped in this arm, so the
+            # baseline branch is the expected ref here.
+            promote_commit="$DELEGATED_PROMOTE_COMMIT"
+            expected_ref="refs/heads/$BASELINE_BRANCH"
+            staged_tag_ref="$CI_GOVERNANCE_RELEASE_TAG_STAGING_REF"
           else
             release_commit="$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
             release_records="$RELEASES"
+            promote_commit="$release_commit"
+            expected_ref="$PLAN_EXPECTED_REF"
+            # Only the delegated arm stages a tag object: the govern-inject arm creates
+            # its tags at promote time. An output naming a ref this job did not write
+            # would be exactly the false invariant this change exists to remove.
+            staged_tag_ref=""
           fi
           {
             echo "release_commit=$release_commit"
+            echo "promote_commit=$promote_commit"
+            echo "expected_ref=$expected_ref"
             echo "staging_ref=$CI_GOVERNANCE_RELEASE_STAGING_REF"
+            echo "staged_tag_ref=$staged_tag_ref"
             echo "releases<<EOF"
             printf '%s\n' "$release_records"
             echo "EOF"
@@ -754,19 +796,77 @@ jobs:
           mkdir -p "$dist"
           mvn -B --no-transfer-progress -f pom.xml -DskipTests -DskipEnforceSnapshots clean package
 
-          if [[ "$(jq -r '.packages | length' <<< "$RELEASE")" -gt 0 ]]; then
+          descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
+          declared="$(jq -r '.release.artifacts // [] | .[]' "$descriptor")"
+
+          if [[ -n "$declared" ]]; then
+            # Declared globs are expanded by pathname expansion only. They
+            # arrive as data and are never evaluated, so a product descriptor
+            # cannot become a shell-injection vector. `globstar` stays off
+            # deliberately: a separator-spanning glob is exactly what let
+            # tooling nested below `target` reach the release.
+            shopt -s nullglob
+            root="$PWD"
+            while IFS= read -r pattern; do
+              [[ -n "$pattern" ]] || continue
+              case "$pattern" in
+                /*|*'**'*|*..*)
+                  echo "::error title=Invalid release artifact::release.artifacts entry '$pattern' must be a relative path inside the working directory, without '..' or '**'."
+                  exit 1
+                  ;;
+              esac
+              saved_ifs="$IFS"
+              IFS=
+              # Unquoted on purpose: this is the pathname expansion. An empty
+              # IFS suppresses word splitting so a path containing spaces stays
+              # one match.
+              # shellcheck disable=SC2206
+              matches=($pattern)
+              IFS="$saved_ifs"
+              selected=0
+              for match in ${matches[@]+"${matches[@]}"}; do
+                [[ -f "$match" && "$match" == *.jar ]] || continue
+                resolved="$(cd "$(dirname "$match")" && pwd -P)/$(basename "$match")"
+                case "$resolved" in
+                  "$root"/*) ;;
+                  *)
+                    echo "::error title=Invalid release artifact::release.artifacts entry '$pattern' resolved outside the working directory."
+                    exit 1
+                    ;;
+                esac
+                cp "$resolved" "$dist"/
+                selected=$((selected + 1))
+              done
+              if [[ "$selected" -eq 0 ]]; then
+                echo "::error title=Unmatched release artifact::release.artifacts entry '$pattern' matched no jar."
+                exit 1
+              fi
+            done <<< "$declared"
+          elif [[ "$(jq -r '.packages | length' <<< "$RELEASE")" -gt 0 ]]; then
             while IFS= read -r module; do
               cp "$module"/target/*.jar "$dist"/ 2>/dev/null || true
             done < <(jq -r '.packages[]' <<< "$RELEASE")
           elif [[ "$PROJECT_TYPE" == "single" ]]; then
+            # A single project ships its own build output. When `code/pom.xml`
+            # is an aggregator the reactor deploys as a whole and there is no
+            # root jar, so fall back to the modules' own build output.
             cp target/*.jar "$dist"/ 2>/dev/null || true
-          fi
-
-          # A single reactor deploys as a whole, so its jars may live in modules rather than at the root.
-          if ! ls "$dist"/*.jar > /dev/null 2>&1; then
-            while IFS= read -r jar; do
-              cp "$jar" "$dist"/ 2>/dev/null || true
-            done < <(find . -type f -path '*/target/*.jar')
+            if ! ls "$dist"/*.jar > /dev/null 2>&1; then
+              # Bounded on purpose. Only a direct child of a `target` directory
+              # is a module's build output; anything deeper is tooling that a
+              # plugin unpacked or cached below `target`, and the classifier
+              # jars are not distributions. An unbounded sweep here is what
+              # attached findsecbugs-plugin and *-tests.jar to a release.
+              while IFS= read -r jar; do
+                case "$(basename "$jar")" in
+                  *-tests.jar|*-sources.jar|*-javadoc.jar) continue ;;
+                esac
+                cp "$jar" "$dist"/ 2>/dev/null || true
+              done < <(find . -type f -name '*.jar' -path '*/target/*' ! -path '*/target/*/*')
+            fi
+          else
+            echo "::error title=Undeclared release artifacts::This reactor publishes no package list, so the jars to attach cannot be inferred. Declare release.artifacts in .github/inditextech-ci-java.json."
+            exit 1
           fi
 
           if ! ls "$dist"/*.jar > /dev/null 2>&1; then
@@ -868,13 +968,14 @@ jobs:
 
       - name: Promote the release to the default branch
         id: promote
-        if: needs.prepare-release.outputs.lifecycle_mode != 'delegated' && (needs.build-distributions.result == 'success' || needs.build-distributions.result == 'skipped')
+        if: needs.build-distributions.result == 'success' || needs.build-distributions.result == 'skipped'
         env:
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           EXPECTED_REF: ${{ needs.prepare-release.outputs.expected_ref }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASES: ${{ needs.prepare-release.outputs.releases }}
           RELEASE_COMMIT: ${{ needs.prepare-release.outputs.release_commit }}
+          PROMOTE_COMMIT: ${{ needs.prepare-release.outputs.promote_commit }}
           STAGING_REF: ${{ needs.prepare-release.outputs.staging_ref }}
         working-directory: ${{ env.WORKING_DIRECTORY }}
         shell: bash
@@ -884,14 +985,18 @@ jobs:
           git config user.name "${APP_SLUG}[bot]"
           git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
 
+          # PROMOTE_COMMIT is the tip the branch must end at; RELEASE_COMMIT is what the
+          # tag names. They are the same commit for govern-inject, and differ only for
+          # delegated, whose tip carries the next-development commit that
+          # release:prepare made after the tagged one.
           git fetch --no-tags origin "+${STAGING_REF}:refs/ci-governance/staged" 2>/dev/null || true
-          if [[ "$(git ls-remote origin "$EXPECTED_REF" | cut -f1)" == "$RELEASE_COMMIT" ]]; then
+          if [[ "$(git ls-remote origin "$EXPECTED_REF" | cut -f1)" == "$PROMOTE_COMMIT" ]]; then
             echo "::notice title=Promotion skipped::$EXPECTED_REF already points at the release commit."
             git checkout --force --detach "$RELEASE_COMMIT"
             exit 0
           fi
 
-          if [[ "$(git rev-parse --verify --quiet refs/ci-governance/staged || true)" != "$RELEASE_COMMIT" ]]; then
+          if [[ "$(git rev-parse --verify --quiet refs/ci-governance/staged || true)" != "$PROMOTE_COMMIT" ]]; then
             echo "::error title=Release staging mismatch::$STAGING_REF does not point at the release commit."
             exit 1
           fi
@@ -906,15 +1011,15 @@ jobs:
               echo "::error title=Tag conflict::$tag already exists."
               exit 1
             fi
-            git tag -a "$tag" -m "Release $version"
+            git tag -a "$tag" -m "Release $version" "$RELEASE_COMMIT"
             tag_refs+=("refs/tags/$tag")
           done < <(jq -c '.[]' <<< "$RELEASES")
 
           # Not forced: a branch that moved during the build fails closed with nothing published.
-          git push --atomic origin "${RELEASE_COMMIT}:${EXPECTED_REF}" "${tag_refs[@]}"
+          git push --atomic origin "${PROMOTE_COMMIT}:${EXPECTED_REF}" "${tag_refs[@]}"
 
       - name: Next development iteration and sync PR
-        if: steps.promote.outcome == 'success' || (needs.prepare-release.outputs.lifecycle_mode == 'delegated' && (needs.build-distributions.result == 'success' || needs.build-distributions.result == 'skipped'))
+        if: steps.promote.outcome == 'success'
         env:
           JAVA_HOME: ${{ steps.jdk.outputs.java_home }}
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
@@ -988,6 +1093,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           STAGING_REF: ${{ needs.prepare-release.outputs.staging_ref }}
+          STAGED_TAG_REF: ${{ needs.prepare-release.outputs.staged_tag_ref }}
         working-directory: ${{ env.WORKING_DIRECTORY }}
         shell: bash
         run: |
@@ -996,4 +1102,11 @@ jobs:
             exit 0
           fi
           gh auth setup-git
-          git push origin ":${STAGING_REF}" || true
+          # Not tolerated with `|| true`: a staging ref that is named by an output but
+          # cannot be deleted means the ref was never written, which is the phantom
+          # invariant this lane used to advertise in delegated mode.
+          refs=(":${STAGING_REF}")
+          if [[ -n "${STAGED_TAG_REF:-}" ]]; then
+            refs+=(":${STAGED_TAG_REF}")
+          fi
+          git push origin "${refs[@]}"

@@ -103,10 +103,17 @@ jobs:
           echo "java_home=$(asdf where java)" >> "$GITHUB_OUTPUT"
 
       - name: Check CHANGELOG has Unreleased changes
-        # Skip for skip-release PRs and the engine's automated reconcile PR (no release content).
+        # Skip for PRs that opt out of a release (skip-release label), for the
+        # engine's automated reconcile PR, which never carries release content,
+        # and for the dependency bots. A bot cannot be asked to write a
+        # changelog entry, so gating it here made every dependency bump
+        # permanently red and unmergeable; the bump is recorded by the manifest
+        # and lockfile it changes, not by the log.
         if: >-
           !contains(github.event.pull_request.labels.*.name, 'skip-release') &&
-          github.event.pull_request.head.ref != 'automated/ci-governance-sync'
+          github.event.pull_request.head.ref != 'automated/ci-governance-sync' &&
+          github.event.pull_request.user.login != 'dependabot[bot]' &&
+          github.event.pull_request.user.login != 'renovate[bot]'
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_EVENT_NUMBER: ${{ github.event.pull_request.number }}
