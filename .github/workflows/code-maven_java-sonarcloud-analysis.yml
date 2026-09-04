@@ -195,6 +195,12 @@ jobs:
               exit 1
               ;;
           esac
+          for governed_value in "$sonar_sources" "$sonar_tests" "$sonar_binaries" "$sonar_test_binaries" "$sonar_coverage"; do
+            if [[ "$governed_value" == *$'\n'* ]]; then
+              echo "::error title=Invalid Sonar scope::Resolved analysis paths must not contain newlines." >&2
+              exit 1
+            fi
+          done
           {
             echo "SONAR_SOURCES=${sonar_sources}"
             echo "SONAR_TESTS=${sonar_tests}"
