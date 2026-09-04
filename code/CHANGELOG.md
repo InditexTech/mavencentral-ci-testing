@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-09-04
+
 ### Fixed
 
 - Governed release lane: a single reactor now collects its jars from the whole
@@ -79,7 +81,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configured distributionManagement for Maven Central snapshot repository
 - Excluded jacoco-report-aggregate module from deployment
 
-[Unreleased]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.4...HEAD
+[Unreleased]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.5...HEAD
+
+[0.2.5]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.4...0.2.5
 
 [0.2.4]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.3...0.2.4
 
