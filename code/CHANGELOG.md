@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Reconciled the canary's development version with what is already published on
+  Maven Central. `0.2.6-SNAPSHOT` had been consumed by a release whose artifacts
+  reached Central, so the next release attempt collided with an immutable
+  coordinate; the reactor now opens at `0.2.7-SNAPSHOT`.
+
 ## [0.2.5] - 2026-09-04
 
 ### Fixed
