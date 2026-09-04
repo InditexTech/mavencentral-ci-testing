@@ -1,0 +1,23 @@
+code/jacoco-report-aggregate/pom.xml
+  s_7f7393b1a81790::t_297b0d0f1c59ad 8
+code/mavencentral-ci-testing-core/pom.xml
+  s_7f7393b1a81790::t_f6fd859c0355e5 8
+code/pom.xml
+  s_7f7393b1a81790::t_a1c267e53580fb 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "be0e70a7b23cc1e8e2a0a5a0ead249d8d16315dd",
+  "prompts": {},
+  "sessions": {
+    "s_7f7393b1a81790": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "s_7f7393b1a81790",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
