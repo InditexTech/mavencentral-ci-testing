@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only after the build succeeds, the baseline branch must be protected before a
   release can start, and merges of `automated/ci-governance-sync` no longer cut
   a release.
+- Governed release lane: the project descriptor is now read after the checkout,
+  so releases no longer abort with `Missing descriptor`.
 
 ## [0.2.3] - 2026-09-02
 
