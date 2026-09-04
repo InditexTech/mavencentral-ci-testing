@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-09-04
+
 ### Changed
 
 - Governed release lane: releases are staged on a run-scoped ref and promoted
@@ -71,7 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configured distributionManagement for Maven Central snapshot repository
 - Excluded jacoco-report-aggregate module from deployment
 
-[Unreleased]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.3...HEAD
+[Unreleased]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.4...HEAD
+
+[0.2.4]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.3...0.2.4
 
 [0.2.3]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.2...0.2.3
 
