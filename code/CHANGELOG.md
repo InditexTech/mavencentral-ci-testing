@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Governed release lane: releases are staged on a run-scoped ref and promoted
+  only after the build succeeds, the baseline branch must be protected before a
+  release can start, and merges of `automated/ci-governance-sync` no longer cut
+  a release.
+
 ## [0.2.3] - 2026-09-02
 
 ### Fixed
