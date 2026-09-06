@@ -17,7 +17,7 @@
   "creation_year": 2026,
   "integrity": {
     "algorithm": "hmac-sha256",
-    "signature": "37bcbe5050422d659f08cf3448ab8cf31dcb8b6cb41f64add9a76b9b3a9d7dbd"
+    "signature": "7e39f129f8fe03ed3492216b5d7986bc95a820392f0442b30d432e6a8b439b67"
   },
   "managed_by": "InditexTech CI governance",
   "managed_paths": {
@@ -36,7 +36,7 @@
     ".github/workflows/codeql.yml": "380e061a720659a77678c2626dec0b16a0bbb7c32fd72141b777eb9a390c248e",
     ".github/workflows/pr-verify.yml": "f52295fbfe81578c0a6459d8b384be569933ac78d32fff370932a8dec6943e46",
     ".github/workflows/push-verify.yml": "217097070d0fdef329eae1a7187806a4623d692ce467ca8f1f9a7f56dddb29ed",
-    ".github/workflows/sync-to-develop.yml": "9eb4278deb6be51157152068ccd5f1ee91866943ae9225fb9d8512aaacc88708",
+    ".github/workflows/sync-to-develop.yml": "5c35cf0b946a939d0324b1530a78e319e979f993bd1f0105e64fc4478395d8d7",
     "CODE_OF_CONDUCT.md": "ce1e7a8f68a7917d48c03f9f7aae5529367f73af0e959276e889d33ea1e8d4ab",
     "CONTRIBUTING.md": "4e1264ca54a45df44b362c7533f0eba912bfa77b6f561121ae9e5e9d6aa00df3",
     "SECURITY.md": "0ee7a3356bc3a1c7649e3b7a6a9012b0608011be2b1ff8d106ad02c8950bab25",
@@ -47,7 +47,7 @@
   "repository_id": 1225608612,
   "schema_version": 2,
   "source_digests": {
-    "base": "8af88664d64bb62e112d3039ad780df69cc04f0b3fb5090fd12c8e72d8dab553",
+    "base": "e91480de904eff55e57a7378dab352e6d478f8dcd3d1b822b512979400a2713f",
     "java": "5d5dab327788e9c6429c805ae87b979917d4a7c918f70eb038c8ad00de630027"
   }
 }
