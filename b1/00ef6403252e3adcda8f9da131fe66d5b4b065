@@ -1,0 +1,29 @@
+code/CHANGELOG.md
+  s_2c8d13e852118d::t_3e9d30a7760a56 12-19
+code/pom.xml
+  s_d12f0efa7918ff::t_6872ce47c61a07 217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b100ef6403252e3adcda8f9da131fe66d5b4b065",
+  "prompts": {},
+  "sessions": {
+    "s_2c8d13e852118d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b5450cb2-a999-4d80-9dca-269f793ffb05",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    },
+    "s_d12f0efa7918ff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "23bd279c-1f60-4b86-af4b-8e1b92161afb",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
