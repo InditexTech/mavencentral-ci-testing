@@ -214,7 +214,7 @@
         <configuration>
           <tagNameFormat>@{project.version}</tagNameFormat>
           <autoVersionSubmodules>true</autoVersionSubmodules>
-          <pushChanges>true</pushChanges>
+          <pushChanges>false</pushChanges>
           <scmCommentPrefix>[release]</scmCommentPrefix>
           <arguments>-DskipEnforceSnapshots</arguments>
         </configuration>
