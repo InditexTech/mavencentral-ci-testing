@@ -1,0 +1,25 @@
+code/CHANGELOG.md
+  s_5b84b2fa563075::t_67caf52a58e77d 10-16
+code/jacoco-report-aggregate/pom.xml
+  s_5b84b2fa563075::t_b98387790c915b 8
+code/mavencentral-ci-testing-core/pom.xml
+  s_5b84b2fa563075::t_cd644844ba71ce 8
+code/pom.xml
+  s_5b84b2fa563075::t_b215ec038cef0a 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "6ae5771fadc5dc38d276b5896dde78bf6e7b9c22",
+  "prompts": {},
+  "sessions": {
+    "s_5b84b2fa563075": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ce2696e1-9dca-4ee3-92ed-26fc5cebd828",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
