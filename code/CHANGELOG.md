@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `maven-release-plugin`'s `<configuration>` resolves ahead of any governance
+  `-D` flag, so this POM's own `<pushChanges>true</pushChanges>` silently voided
+  the engine's `-DpushChanges=false` and let `release:prepare` push the release
+  commit, the next-development commit and the tag straight to the baseline
+  branch before anything was built (observed on run `33869524982`, tag
+  `0.2.6`). The plugin's `<pushChanges>` is now `false`, matching the flag the
+  engine already passes, so the effective value no longer depends on which one
+  wins.
 - Reconciled the canary's development version with what is already published on
   Maven Central. `0.2.6-SNAPSHOT` had been consumed by a release whose artifacts
   reached Central, so the next release attempt collided with an immutable
