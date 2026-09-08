@@ -17,7 +17,7 @@
   "creation_year": 2026,
   "integrity": {
     "algorithm": "hmac-sha256",
-    "signature": "7e39f129f8fe03ed3492216b5d7986bc95a820392f0442b30d432e6a8b439b67"
+    "signature": "baea9bbac09427e450147b53051879a1e679e745d4c48e4a51ad54d7ecd158e0"
   },
   "managed_by": "InditexTech CI governance",
   "managed_paths": {
@@ -43,8 +43,14 @@
     "code/.tool-versions": "85df00ed5674e7c41af00dab24ac2123d7ceda14db5389197157cb1c58aea536",
     "repolinter.json": "0efb305c47a63f03c488a34906fc2d5471c84145c2ff553f2aacf3a41b92e1a1"
   },
+  "managed_variables": {
+    "DEVELOPMENT_FLOW": "git-flow",
+    "PROJECT_TYPE": "single",
+    "WORKING_DIRECTORY": "code"
+  },
   "profile": "java",
   "repository_id": 1225608612,
+  "retained_paths": {},
   "schema_version": 2,
   "source_digests": {
     "base": "e91480de904eff55e57a7378dab352e6d478f8dcd3d1b822b512979400a2713f",
