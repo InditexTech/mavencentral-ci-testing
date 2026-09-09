@@ -35,7 +35,8 @@ jobs:
     uses: ./.github/workflows/code-maven_java-release-core.yml
     with:
       release_type: ${{ inputs.release_type }}
-    secrets: inherit
+    secrets:
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
 
   publish-maven-central:
     name: Publish ${{ matrix.release.tag }} to Maven Central
@@ -87,7 +88,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Publisher is descriptor-selected: govern-inject (default) = engine maven-central composite; delegated = POM's own release. Fail closed otherwise.
           descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
           mode="$(jq -r '.release.lifecycle // "govern-inject"' "$descriptor")"
           case "$mode" in
@@ -113,7 +113,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Reject any .tool-versions line that is not a strict "<plugin> <version>" before asdf reads it.
           if grep -Evq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+-]+$' .tool-versions; then
             echo "::error title=Invalid tool-versions::${WORKING_DIRECTORY}/.tool-versions is malformed."
             exit 1
@@ -137,7 +136,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Emit the asdf JDK as a step output so only the Maven build uses the consumer JDK; other steps keep the pinned Java 25.
           echo "java_home=$(asdf where java)" >> "$GITHUB_OUTPUT"
 
       - name: Deploy release to Maven Central
@@ -161,7 +159,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Delegated: deploy the already-checked-out GA tag tree directly (POM binds central-publishing + gpg to deploy); release:perform can't rebuild the checkout cross-job. -DskipEnforceSnapshots: GA is not -SNAPSHOT.
           settings="$RUNNER_TEMP/java-central-settings.xml"
           cat > "$settings" <<'XML'
           <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">

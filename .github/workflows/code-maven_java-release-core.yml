@@ -18,6 +18,9 @@ on:
       releases:
         description: JSON array of release tags, versions, module lists, and next-dev versions.
         value: ${{ jobs.prepare-release.outputs.releases }}
+    secrets:
+      APP_PRIVATE_KEY:
+        required: true
 
 permissions:
   contents: read
@@ -296,7 +299,7 @@ jobs:
             mvn -q -B --no-transfer-progress -f "$pom" \
               help:evaluate -Dexpression=project.artifactId -DforceStdout
           }
-          bump_semver() {  # <X.Y.Z> <major|minor|patch>
+          bump_semver() {
             local major minor patch
             IFS=. read -r major minor patch <<< "$1"
             case "$2" in
@@ -500,7 +503,6 @@ jobs:
             git check-ref-format --allow-onelevel "refs/tags/$(jq -r '.tag' <<< "$record")"
           done < <(jq -c '.[]' <<< "$RELEASES")
 
-          # Stage the commit on a non-branch ref: build needs it fetchable, main must not move yet.
           git push --atomic --force origin "HEAD:$CI_GOVERNANCE_RELEASE_STAGING_REF"
 
       - name: Plan delegated release
@@ -515,7 +517,7 @@ jobs:
         run: |
           set -euo pipefail
           strip_snapshot() { printf '%s' "${1%-SNAPSHOT}"; }
-          bump_semver() {  # <X.Y.Z> <major|minor|patch>
+          bump_semver() {
             local major minor patch
             IFS=. read -r major minor patch <<< "$1"
             case "$2" in
@@ -615,17 +617,89 @@ jobs:
             git -C "$GITHUB_WORKSPACE" commit -m "[java-release] Consume changelog for release $RELEASE_VERSION"
           fi
 
-          # pushChanges=false: the POM-owned plugin still owns the version and the
-          # tag NAME, but the engine owns when they become visible. Left at its
-          # default, release:prepare writes both commits and the tag straight to the
-          # baseline branch from inside prepare-release -- before build-distributions
-          # exists -- so a failed build burns the version for an artifact that was
-          # never produced.
-          mvn -B --no-transfer-progress -f pom.xml \
+          baseline_before="$(git -C "$GITHUB_WORKSPACE" ls-remote origin "refs/heads/$BASELINE_BRANCH" | cut -f1)"
+          git -C "$GITHUB_WORKSPACE" ls-remote --tags origin \
+            | awk '{print $2}' | sort > "$RUNNER_TEMP/origin-tags-before.txt"
+
+          real_git="$(command -v git)"
+          interposer_dir="$(mktemp -d "$RUNNER_TEMP/ci-governance-git-interposer.XXXXXX")"
+          interposer_log="$RUNNER_TEMP/ci-governance-git-interposer-blocked.log"
+          : > "$interposer_log"
+          cat > "$interposer_dir/git" <<'GIT_SHIM'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          subcommand=""
+          skip_next="false"
+          for arg in "$@"; do
+            if [[ "$skip_next" == "true" ]]; then
+              skip_next="false"
+              continue
+            fi
+            case "$arg" in
+              -C|-c|--git-dir|--work-tree|--namespace|--super-prefix|--exec-path|--config-env)
+                skip_next="true"
+                ;;
+              --git-dir=*|--work-tree=*|--namespace=*|--super-prefix=*|--exec-path=*|--config-env=*)
+                ;;
+              -*)
+                ;;
+              *)
+                subcommand="$arg"
+                break
+                ;;
+            esac
+          done
+          if [[ "$subcommand" == "push" ]]; then
+            {
+              printf 'blocked: git'
+              for arg in "$@"; do
+                printf ' %q' "$arg"
+              done
+              printf '\n'
+            } >> "$CI_GOVERNANCE_GIT_INTERPOSER_LOG"
+            exit 0
+          fi
+          exec "$CI_GOVERNANCE_REAL_GIT" "$@"
+          GIT_SHIM
+          chmod +x "$interposer_dir/git"
+
+          CI_GOVERNANCE_REAL_GIT="$real_git" \
+            CI_GOVERNANCE_GIT_INTERPOSER_LOG="$interposer_log" \
+            PATH="$interposer_dir:$PATH" \
+            mvn -B --no-transfer-progress -f pom.xml \
             release:clean release:prepare \
             -DpushChanges=false \
             -DdevelopmentVersion="$NEXT_DEV" \
             -Darguments="-DskipTests"
+
+          if [[ -s "$interposer_log" ]]; then
+            while IFS= read -r blocked_line; do
+              echo "::notice title=Blocked plugin push::$blocked_line"
+            done < "$interposer_log"
+          fi
+
+          baseline_after="$(git -C "$GITHUB_WORKSPACE" ls-remote origin "refs/heads/$BASELINE_BRANCH" | cut -f1)"
+          git -C "$GITHUB_WORKSPACE" ls-remote --tags origin \
+            | awk '{print $2}' | sort > "$RUNNER_TEMP/origin-tags-after.txt"
+          leaked_refs=()
+          while IFS= read -r ref; do
+            [[ -n "$ref" ]] && leaked_refs+=("$ref")
+          done < <(comm -13 "$RUNNER_TEMP/origin-tags-before.txt" "$RUNNER_TEMP/origin-tags-after.txt")
+
+          if [[ "$baseline_after" != "$baseline_before" || "${#leaked_refs[@]}" -ne 0 ]]; then
+            for ref in "${leaked_refs[@]}"; do
+              git -C "$GITHUB_WORKSPACE" push origin --delete "$ref" \
+                || echo "::warning title=Tag rollback failed::Could not delete $ref from origin."
+            done
+            if [[ "$baseline_after" != "$baseline_before" ]]; then
+              git -C "$GITHUB_WORKSPACE" push \
+                --force-with-lease="refs/heads/$BASELINE_BRANCH:$baseline_after" \
+                origin "$baseline_before:refs/heads/$BASELINE_BRANCH" \
+                || echo "::warning title=Baseline rollback failed::$BASELINE_BRANCH still carries commits release:prepare pushed; reset it to $baseline_before by hand."
+            fi
+            echo "::error title=Release published before it was built::maven-release-plugin wrote to origin during prepare-release despite the engine's git interposer. Treat this as an interposer bypass and escalate to the CI governance engine owners." >&2
+            exit 1
+          fi
 
           git -C "$GITHUB_WORKSPACE" tag --list | sort > "$RUNNER_TEMP/java-tags-after.txt"
           new_tags=()
@@ -638,18 +712,11 @@ jobs:
           fi
           release_tag="${new_tags[0]}"
           release_commit="$(git -C "$GITHUB_WORKSPACE" rev-list -n 1 "$release_tag")"
-          # The tip carries the next-development commit; the tag stays on the release
-          # commit. main must end at the tip, so both are staged and promoted together.
           promote_commit="$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
 
-          # Same staging contract as the govern-inject arm (see "Commit and stage
-          # release"): the build needs these objects fetchable, and the baseline
-          # branch must not move until build-distributions has concluded.
           git -C "$GITHUB_WORKSPACE" push --atomic --force origin \
             "HEAD:$CI_GOVERNANCE_RELEASE_STAGING_REF" \
             "refs/tags/$release_tag:$CI_GOVERNANCE_RELEASE_TAG_STAGING_REF"
-          # Drop the local GA-named tag: promote is the only step allowed to make that
-          # name exist, so its tag-conflict check stays meaningful on a re-run.
           git -C "$GITHUB_WORKSPACE" tag -d "$release_tag"
 
           releases="$(jq -cn \
@@ -682,9 +749,6 @@ jobs:
           if [[ "$LIFECYCLE_MODE" == "delegated" ]]; then
             release_commit="$DELEGATED_RELEASE_COMMIT"
             release_records="$DELEGATED_RELEASES"
-            # The delegated tip is the next-development commit; the tag stays behind
-            # it on the release commit. release-plan is skipped in this arm, so the
-            # baseline branch is the expected ref here.
             promote_commit="$DELEGATED_PROMOTE_COMMIT"
             expected_ref="refs/heads/$BASELINE_BRANCH"
             staged_tag_ref="$CI_GOVERNANCE_RELEASE_TAG_STAGING_REF"
@@ -693,9 +757,6 @@ jobs:
             release_records="$RELEASES"
             promote_commit="$release_commit"
             expected_ref="$PLAN_EXPECTED_REF"
-            # Only the delegated arm stages a tag object: the govern-inject arm creates
-            # its tags at promote time. An output naming a ref this job did not write
-            # would be exactly the false invariant this change exists to remove.
             staged_tag_ref=""
           fi
           {
@@ -799,12 +860,14 @@ jobs:
           descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
           declared="$(jq -r '.release.artifacts // [] | .[]' "$descriptor")"
 
+          is_release_distribution() {
+            case "$(basename "$1")" in
+              *-tests.jar|*-sources.jar|*-javadoc.jar) return 1 ;;
+            esac
+            [[ -f "$1" && "$1" == *.jar ]]
+          }
+
           if [[ -n "$declared" ]]; then
-            # Declared globs are expanded by pathname expansion only. They
-            # arrive as data and are never evaluated, so a product descriptor
-            # cannot become a shell-injection vector. `globstar` stays off
-            # deliberately: a separator-spanning glob is exactly what let
-            # tooling nested below `target` reach the release.
             shopt -s nullglob
             root="$PWD"
             while IFS= read -r pattern; do
@@ -817,9 +880,6 @@ jobs:
               esac
               saved_ifs="$IFS"
               IFS=
-              # Unquoted on purpose: this is the pathname expansion. An empty
-              # IFS suppresses word splitting so a path containing spaces stays
-              # one match.
               # shellcheck disable=SC2206
               matches=($pattern)
               IFS="$saved_ifs"
@@ -843,24 +903,25 @@ jobs:
               fi
             done <<< "$declared"
           elif [[ "$(jq -r '.packages | length' <<< "$RELEASE")" -gt 0 ]]; then
+            shopt -s nullglob
             while IFS= read -r module; do
-              cp "$module"/target/*.jar "$dist"/ 2>/dev/null || true
+              [[ -n "$module" ]] || continue
+              selected=0
+              for jar in "$module"/target/*.jar; do
+                is_release_distribution "$jar" || continue
+                cp "$jar" "$dist"/
+                selected=$((selected + 1))
+              done
+              if [[ "$selected" -eq 0 ]]; then
+                echo "::error title=Undeclared release artifacts::Module '$module' is published but produced no distribution jar, so the assets to attach cannot be inferred. Declare release.artifacts in .github/inditextech-ci-java.json."
+                exit 1
+              fi
             done < <(jq -r '.packages[]' <<< "$RELEASE")
           elif [[ "$PROJECT_TYPE" == "single" ]]; then
-            # A single project ships its own build output. When `code/pom.xml`
-            # is an aggregator the reactor deploys as a whole and there is no
-            # root jar, so fall back to the modules' own build output.
             cp target/*.jar "$dist"/ 2>/dev/null || true
             if ! ls "$dist"/*.jar > /dev/null 2>&1; then
-              # Bounded on purpose. Only a direct child of a `target` directory
-              # is a module's build output; anything deeper is tooling that a
-              # plugin unpacked or cached below `target`, and the classifier
-              # jars are not distributions. An unbounded sweep here is what
-              # attached findsecbugs-plugin and *-tests.jar to a release.
               while IFS= read -r jar; do
-                case "$(basename "$jar")" in
-                  *-tests.jar|*-sources.jar|*-javadoc.jar) continue ;;
-                esac
+                is_release_distribution "$jar" || continue
                 cp "$jar" "$dist"/ 2>/dev/null || true
               done < <(find . -type f -name '*.jar' -path '*/target/*' ! -path '*/target/*/*')
             fi
@@ -985,10 +1046,6 @@ jobs:
           git config user.name "${APP_SLUG}[bot]"
           git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
 
-          # PROMOTE_COMMIT is the tip the branch must end at; RELEASE_COMMIT is what the
-          # tag names. They are the same commit for govern-inject, and differ only for
-          # delegated, whose tip carries the next-development commit that
-          # release:prepare made after the tagged one.
           git fetch --no-tags origin "+${STAGING_REF}:refs/ci-governance/staged" 2>/dev/null || true
           if [[ "$(git ls-remote origin "$EXPECTED_REF" | cut -f1)" == "$PROMOTE_COMMIT" ]]; then
             echo "::notice title=Promotion skipped::$EXPECTED_REF already points at the release commit."
@@ -1015,7 +1072,6 @@ jobs:
             tag_refs+=("refs/tags/$tag")
           done < <(jq -c '.[]' <<< "$RELEASES")
 
-          # Not forced: a branch that moved during the build fails closed with nothing published.
           git push --atomic origin "${PROMOTE_COMMIT}:${EXPECTED_REF}" "${tag_refs[@]}"
 
       - name: Next development iteration and sync PR
@@ -1102,9 +1158,6 @@ jobs:
             exit 0
           fi
           gh auth setup-git
-          # Not tolerated with `|| true`: a staging ref that is named by an output but
-          # cannot be deleted means the ref was never written, which is the phantom
-          # invariant this lane used to advertise in delegated mode.
           refs=(":${STAGING_REF}")
           if [[ -n "${STAGED_TAG_REF:-}" ]]; then
             refs+=(":${STAGED_TAG_REF}")

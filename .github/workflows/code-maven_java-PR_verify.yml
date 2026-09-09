@@ -64,7 +64,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Reject any .tool-versions line that is not a strict "<plugin> <version>" before asdf reads it.
           if grep -Evq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+-]+$' .tool-versions; then
             echo "::error title=Invalid tool-versions::${WORKING_DIRECTORY}/.tool-versions is malformed."
             exit 1
@@ -88,7 +87,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Emit the asdf JDK as a step output so only the Maven build uses the consumer JDK; other steps keep the pinned Java 25.
           echo "java_home=$(asdf where java)" >> "$GITHUB_OUTPUT"
 
       - name: Verify, test, and build
@@ -98,7 +96,6 @@ jobs:
           JAVA_HOME: ${{ steps.jdk.outputs.java_home }}
         run: |
           set -euo pipefail
-          # The reactor at ${WORKING_DIRECTORY} builds single or all monorepo members; verify = full lifecycle (compile, unit+integration tests, JaCoCo, enforcer).
           case "$PROJECT_TYPE" in
             single)
               mvn -B --no-transfer-progress -f pom.xml clean verify
