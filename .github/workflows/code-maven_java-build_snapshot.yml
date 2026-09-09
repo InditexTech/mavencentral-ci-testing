@@ -87,7 +87,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Reject any .tool-versions line that is not a strict "<plugin> <version>" before asdf reads it.
           if grep -Evq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+-]+$' .tool-versions; then
             echo "::error title=Invalid tool-versions::${WORKING_DIRECTORY}/.tool-versions is malformed."
             exit 1
@@ -111,7 +110,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Emit the asdf JDK as a step output so only the Maven build uses the consumer JDK; other steps keep the pinned Java 25.
           echo "java_home=$(asdf where java)" >> "$GITHUB_OUTPUT"
 
       - name: Verify snapshot candidate
@@ -123,13 +121,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Snapshot deploy is opt-in per descriptor (release.snapshot_publish, default off); absent/false = verified but not deployed.
           descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
           snapshot_optin="$(jq -r '.release.snapshot_publish // false' "$descriptor")"
 
           publish_snapshot=false
           if [[ "$snapshot_optin" == "true" && "$GITHUB_EVENT_NAME" == "push" ]]; then
-            # Skip the redundant snapshot from release-bot commits; key on the <slug>[bot] committer (not subject) so it holds for govern-inject + delegated.
             committer_email="$(git -C "$GITHUB_WORKSPACE" show -s --format=%ae HEAD)"
             if [[ "$committer_email" == *"[bot]@users.noreply.github.com" ]]; then
               echo "::notice title=Snapshot skipped::Release-bot commit does not need a snapshot."
@@ -139,7 +135,6 @@ jobs:
           fi
           echo "publish_snapshot=$publish_snapshot" >> "$GITHUB_OUTPUT"
 
-          # Always verify the snapshot candidate; the published version is the POM's -SNAPSHOT (Portal timestamps each deploy; no version munging).
           case "$PROJECT_TYPE" in
             single|monorepo)
               mvn -B --no-transfer-progress -f pom.xml clean verify
@@ -204,7 +199,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Reject any .tool-versions line that is not a strict "<plugin> <version>" before asdf reads it.
           if grep -Evq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+-]+$' .tool-versions; then
             echo "::error title=Invalid tool-versions::${WORKING_DIRECTORY}/.tool-versions is malformed."
             exit 1
@@ -228,7 +222,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Emit the asdf JDK as a step output so only the Maven build uses the consumer JDK; other steps keep the pinned Java 25.
           echo "java_home=$(asdf where java)" >> "$GITHUB_OUTPUT"
 
       - name: Resolve publishable modules
@@ -237,12 +230,10 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$PROJECT_TYPE" != "monorepo" ]]; then
-            # A single reactor deploys as a whole; the composite rejects a populated packages for single.
             echo "packages=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # artifact_id mirrors the adapter's _artifact_id(): map raw descriptor package names to the reactor's module slug (= flat dir name).
           artifact_id() {
             printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
           }
