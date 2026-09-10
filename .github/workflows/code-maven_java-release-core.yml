@@ -23,6 +23,7 @@ on:
         required: true
 
 permissions:
+  actions: read
   contents: read
 
 env:
@@ -66,6 +67,8 @@ jobs:
       lifecycle_mode: ${{ steps.lifecycle.outputs.mode }}
       staging_ref: ${{ steps.release-metadata.outputs.staging_ref }}
       staged_tag_ref: ${{ steps.release-metadata.outputs.staged_tag_ref }}
+      release_source_artifact: ${{ steps.release-source-handoff.outputs.artifact_name }}
+      release_source_sha256: ${{ steps.release-source-handoff.outputs.bundle_sha256 }}
     steps:
       - name: Resolve release context
         id: release-context
@@ -147,6 +150,16 @@ jobs:
               exit 1
               ;;
           esac
+          case "${WORKING_DIRECTORY:-}" in
+            ""|/*|..|../*|*/..|*/../*)
+              echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
+            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+            exit 1
+          fi
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Resolve release lifecycle
@@ -287,17 +300,24 @@ jobs:
             printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
           }
           strip_snapshot() { printf '%s' "${1%-SNAPSHOT}"; }
+          # Resolve declared Maven artifactIds through the reactor.
           read_version() {
-            local pom="pom.xml"
-            [[ -n "$1" ]] && pom="$1/pom.xml"
-            mvn -q -B --no-transfer-progress -f "$pom" \
-              help:evaluate -Dexpression=project.version -DforceStdout
+            if [[ -n "$1" ]]; then
+              mvn -q -B --no-transfer-progress -f pom.xml -pl ":$1" \
+                help:evaluate -Dexpression=project.version -DforceStdout
+            else
+              mvn -q -B --no-transfer-progress -f pom.xml \
+                help:evaluate -Dexpression=project.version -DforceStdout
+            fi
           }
           read_artifact() {
-            local pom="pom.xml"
-            [[ -n "$1" ]] && pom="$1/pom.xml"
-            mvn -q -B --no-transfer-progress -f "$pom" \
-              help:evaluate -Dexpression=project.artifactId -DforceStdout
+            if [[ -n "$1" ]]; then
+              mvn -q -B --no-transfer-progress -f pom.xml -pl ":$1" \
+                help:evaluate -Dexpression=project.artifactId -DforceStdout
+            else
+              mvn -q -B --no-transfer-progress -f pom.xml \
+                help:evaluate -Dexpression=project.artifactId -DforceStdout
+            fi
           }
           bump_semver() {
             local major minor patch
@@ -367,13 +387,11 @@ jobs:
               fi
               version="${versions[0]}"
               next_dev="$(bump_semver "$version" "$release_bump")-SNAPSHOT"
-              modules_json="$(printf '%s\n' "${modules[@]}" | jq -R . | jq -sc .)"
               jq -cn \
-                --argjson packages "$modules_json" \
                 --arg version "$version" \
                 --arg tag "$version" \
                 --arg next_dev "$next_dev" \
-                '{packages: $packages, version: $version, tag: $tag, next_dev: $next_dev}' >> "$records_file"
+                '{packages: [], version: $version, tag: $tag, next_dev: $next_dev}' >> "$records_file"
               return
             fi
 
@@ -612,6 +630,17 @@ jobs:
 
           git -C "$GITHUB_WORKSPACE" checkout -B "$BASELINE_BRANCH"
 
+          packages_json='[]'
+          if [[ "$PROJECT_TYPE" == "monorepo" ]]; then
+            descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
+            packages_json="$(jq -c '[(.release.packages // [])[] | ascii_downcase
+              | gsub("[^a-z0-9]+"; "-") | gsub("^-+|-+$"; "")]' "$descriptor")"
+            if [[ "$(jq -r 'length' <<< "$packages_json")" -eq 0 ]]; then
+              echo "::error title=No release packages::A monorepo must declare release.packages in .github/inditextech-ci-java.json." >&2
+              exit 1
+            fi
+          fi
+
           git -C "$GITHUB_WORKSPACE" add -- "$WORKING_DIRECTORY/CHANGELOG.md"
           if ! git -C "$GITHUB_WORKSPACE" diff --cached --quiet; then
             git -C "$GITHUB_WORKSPACE" commit -m "[java-release] Consume changelog for release $RELEASE_VERSION"
@@ -720,10 +749,11 @@ jobs:
           git -C "$GITHUB_WORKSPACE" tag -d "$release_tag"
 
           releases="$(jq -cn \
+            --argjson packages "$packages_json" \
             --arg version "$RELEASE_VERSION" \
             --arg tag "$release_tag" \
             --arg next_dev "$NEXT_DEV" \
-            '[{packages: [], version: $version, tag: $tag, next_dev: $next_dev}]')"
+            '[{packages: $packages, version: $version, tag: $tag, next_dev: $next_dev}]')"
           {
             echo "release_commit=$release_commit"
             echo "promote_commit=$promote_commit"
@@ -770,6 +800,49 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Create release source handoff
+        id: release-source-handoff
+        env:
+          SOURCE_COMMIT: ${{ steps.release-metadata.outputs.release_commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] \
+            || ! git -C "$GITHUB_WORKSPACE" cat-file -e "$SOURCE_COMMIT^{commit}"; then
+            echo "::error title=Invalid release source::Release metadata did not provide a local immutable commit." >&2
+            exit 1
+          fi
+          handoff_dir="$RUNNER_TEMP/release-source"
+          bundle="$handoff_dir/release.bundle"
+          metadata="$handoff_dir/release-metadata.json"
+          artifact_name="java-release-source-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$handoff_dir"
+          git -C "$GITHUB_WORKSPACE" bundle create --version=2 "$bundle" --all "$SOURCE_COMMIT"
+          git -C "$GITHUB_WORKSPACE" bundle verify "$bundle"
+          bundle_sha256="$(sha256sum "$bundle" | awk '{print $1}')"
+          jq -n \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg source_commit "$SOURCE_COMMIT" \
+            --arg bundle_sha256 "$bundle_sha256" \
+            --arg artifact_name "$artifact_name" \
+            '{run_id: $run_id, run_attempt: $run_attempt, source_commit: $source_commit, bundle_sha256: $bundle_sha256, bundle_format: "git-bundle-v2", artifact_name: $artifact_name}' \
+            > "$metadata"
+          {
+            echo "artifact_name=$artifact_name"
+            echo "bundle_sha256=$bundle_sha256"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload release source handoff
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.release-source-handoff.outputs.artifact_name }}
+          path: |
+            ${{ runner.temp }}/release-source/release.bundle
+            ${{ runner.temp }}/release-source/release-metadata.json
+          if-no-files-found: error
+          retention-days: 14
+
   build-distributions:
     name: Build ${{ matrix.release.tag }}
     needs: prepare-release
@@ -780,11 +853,65 @@ jobs:
       matrix:
         release: ${{ fromJSON(needs.prepare-release.outputs.releases) }}
     steps:
-      - name: Check out release commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ needs.prepare-release.outputs.release_commit }}
+      - name: Download release source handoff
+        env:
+          EXPECTED_ARTIFACT: ${{ needs.prepare-release.outputs.release_source_artifact }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$GITHUB_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$EXPECTED_ARTIFACT" \
+            --dir "$RUNNER_TEMP/release-source"
+
+      - name: Verify and materialize release source
+        env:
+          EXPECTED_RUN_ID: ${{ github.run_id }}
+          EXPECTED_RUN_ATTEMPT: ${{ github.run_attempt }}
+          EXPECTED_SOURCE_COMMIT: ${{ needs.prepare-release.outputs.release_commit }}
+          EXPECTED_BUNDLE_SHA256: ${{ needs.prepare-release.outputs.release_source_sha256 }}
+          EXPECTED_ARTIFACT: ${{ needs.prepare-release.outputs.release_source_artifact }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/release-source/release.bundle"
+          metadata="$RUNNER_TEMP/release-source/release-metadata.json"
+          if [[ ! -f "$bundle" || ! -f "$metadata" ]] \
+            || [[ ! "$EXPECTED_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] \
+            || [[ ! "$EXPECTED_BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error title=Invalid release source handoff::The release bundle or its immutable metadata is missing." >&2
+            exit 1
+          fi
+          if ! jq -e \
+            --arg run_id "$EXPECTED_RUN_ID" \
+            --arg run_attempt "$EXPECTED_RUN_ATTEMPT" \
+            --arg source_commit "$EXPECTED_SOURCE_COMMIT" \
+            --arg bundle_sha256 "$EXPECTED_BUNDLE_SHA256" \
+            --arg artifact_name "$EXPECTED_ARTIFACT" \
+            'type == "object" and .run_id == $run_id and .run_attempt == $run_attempt and .source_commit == $source_commit and .bundle_sha256 == $bundle_sha256 and .bundle_format == "git-bundle-v2" and .artifact_name == $artifact_name' \
+            "$metadata" > /dev/null; then
+            echo "::error title=Invalid release source handoff::Release source metadata does not match this run." >&2
+            exit 1
+          fi
+          actual_bundle_sha256="$(sha256sum "$bundle" | awk '{print $1}')"
+          if [[ "$actual_bundle_sha256" != "$EXPECTED_BUNDLE_SHA256" ]]; then
+            echo "::error title=Release source digest mismatch::The downloaded release bundle does not match its prepared digest." >&2
+            exit 1
+          fi
+          verifier="$RUNNER_TEMP/release-source-verifier"
+          git init --quiet "$verifier"
+          git -C "$verifier" bundle verify "$bundle"
+          if find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
+            echo "::error title=Unexpected release workspace::Build distributions requires an empty workspace before materializing the handoff." >&2
+            exit 1
+          fi
+          git clone --no-checkout "$bundle" "$GITHUB_WORKSPACE"
+          git -C "$GITHUB_WORKSPACE" checkout --detach "$EXPECTED_SOURCE_COMMIT"
+          if [[ "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" != "$EXPECTED_SOURCE_COMMIT" ]]; then
+            echo "::error title=Release source commit mismatch::The materialized source is not the prepared release commit." >&2
+            exit 1
+          fi
 
       - name: Resolve governed project type
         shell: bash
@@ -803,6 +930,16 @@ jobs:
               exit 1
               ;;
           esac
+          case "${WORKING_DIRECTORY:-}" in
+            ""|/*|..|../*|*/..|*/../*)
+              echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
+            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+            exit 1
+          fi
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Set up workflow Java
@@ -859,6 +996,13 @@ jobs:
 
           descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
           declared="$(jq -r '.release.artifacts // [] | .[]' "$descriptor")"
+          artifact_ids="$(jq -c '.packages' <<< "$RELEASE")"
+          if [[ "$PROJECT_TYPE" == "monorepo" ]] \
+            && [[ "$(jq -r 'length' <<< "$artifact_ids")" -eq 0 ]] \
+            && [[ "$(jq -r '.release.strategy // empty' "$descriptor")" == "locked-step" ]]; then
+            artifact_ids="$(jq -c '[(.release.packages // [])[] | ascii_downcase
+              | gsub("[^a-z0-9]+"; "-") | gsub("^-+|-+$"; "")]' "$descriptor")"
+          fi
 
           is_release_distribution() {
             case "$(basename "$1")" in
@@ -902,21 +1046,23 @@ jobs:
                 exit 1
               fi
             done <<< "$declared"
-          elif [[ "$(jq -r '.packages | length' <<< "$RELEASE")" -gt 0 ]]; then
-            shopt -s nullglob
+          elif [[ "$(jq -r 'length' <<< "$artifact_ids")" -gt 0 ]]; then
+            release_version="$(jq -r '.version // .tag' <<< "$RELEASE")"
             while IFS= read -r module; do
               [[ -n "$module" ]] || continue
               selected=0
-              for jar in "$module"/target/*.jar; do
+              # Select the module JAR by Maven artifactId at arbitrary depth.
+              while IFS= read -r jar; do
                 is_release_distribution "$jar" || continue
                 cp "$jar" "$dist"/
                 selected=$((selected + 1))
-              done
+              done < <(find . -type f \
+                -path "*/target/${module}-${release_version}.jar")
               if [[ "$selected" -eq 0 ]]; then
-                echo "::error title=Undeclared release artifacts::Module '$module' is published but produced no distribution jar, so the assets to attach cannot be inferred. Declare release.artifacts in .github/inditextech-ci-java.json."
+                echo "::error title=Undeclared release artifacts::Module '$module' is published but produced no ${module}-${release_version}.jar, so the assets to attach cannot be inferred. Declare release.artifacts in .github/inditextech-ci-java.json."
                 exit 1
               fi
-            done < <(jq -r '.packages[]' <<< "$RELEASE")
+            done < <(jq -r '.[]' <<< "$artifact_ids")
           elif [[ "$PROJECT_TYPE" == "single" ]]; then
             cp target/*.jar "$dist"/ 2>/dev/null || true
             if ! ls "$dist"/*.jar > /dev/null 2>&1; then
@@ -986,6 +1132,16 @@ jobs:
               exit 1
               ;;
           esac
+          case "${WORKING_DIRECTORY:-}" in
+            ""|/*|..|../*|*/..|*/../*)
+              echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
+            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+            exit 1
+          fi
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Set up workflow Java

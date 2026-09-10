@@ -71,6 +71,16 @@ jobs:
               exit 1
               ;;
           esac
+          case "${WORKING_DIRECTORY:-}" in
+            ""|/*|..|../*|*/..|*/../*)
+              echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
+            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+            exit 1
+          fi
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Set up workflow Java
@@ -183,6 +193,16 @@ jobs:
               exit 1
               ;;
           esac
+          case "${WORKING_DIRECTORY:-}" in
+            ""|/*|..|../*|*/..|*/../*)
+              echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
+            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+            exit 1
+          fi
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Set up workflow Java
@@ -234,19 +254,18 @@ jobs:
             exit 0
           fi
 
-          artifact_id() {
-            printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
-          }
           descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
-          packages=""
-          while IFS= read -r package; do
-            packages="${packages:+$packages,}$(artifact_id "$package")"
-          done < <(jq -er '.release.packages[]' "$descriptor")
-          if [[ -z "$packages" ]]; then
-            echo "::error title=Invalid descriptor::No publishable modules resolved from .release.packages."
+          strategy="$(jq -er '.release.strategy' "$descriptor")"
+          if [[ "$strategy" == "locked-step" ]]; then
+            echo "packages=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$strategy" != "independent" ]]; then
+            echo "::error title=Invalid release strategy::Monorepos must declare release.strategy as locked-step or independent."
             exit 1
           fi
-          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          echo "::error title=Unsupported independent snapshot::Independent Maven monorepo snapshots require InditexTech/gh-actions#10."
+          exit 1
 
       - name: Deploy snapshot to Maven Central
         env:
