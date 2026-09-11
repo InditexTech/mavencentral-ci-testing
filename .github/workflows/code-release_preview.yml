@@ -59,6 +59,16 @@ jobs:
               exit 1
               ;;
           esac
+          case "${WORKING_DIRECTORY:-}" in
+            ""|/*|..|../*|*/..|*/../*)
+              echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
+            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+            exit 1
+          fi
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Set up workflow Java
@@ -168,11 +178,15 @@ jobs:
             printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
           }
           strip_snapshot() { printf '%s' "${1%-SNAPSHOT}"; }
+          # Resolve declared Maven artifactIds through the reactor.
           read_version() {
-            local pom="pom.xml"
-            [[ -n "$1" ]] && pom="$1/pom.xml"
-            mvn -q -B --no-transfer-progress -f "$pom" \
-              help:evaluate -Dexpression=project.version -DforceStdout
+            if [[ -n "$1" ]]; then
+              mvn -q -B --no-transfer-progress -f pom.xml -pl ":$1" \
+                help:evaluate -Dexpression=project.version -DforceStdout
+            else
+              mvn -q -B --no-transfer-progress -f pom.xml \
+                help:evaluate -Dexpression=project.version -DforceStdout
+            fi
           }
           bump_semver() {
             local major minor patch

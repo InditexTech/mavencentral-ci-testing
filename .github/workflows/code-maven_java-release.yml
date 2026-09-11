@@ -23,6 +23,7 @@ on:
           - release-type/patch
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -81,6 +82,16 @@ jobs:
               exit 1
               ;;
           esac
+          case "${WORKING_DIRECTORY:-}" in
+            ""|/*|..|../*|*/..|*/../*)
+              echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
+            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+            exit 1
+          fi
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Resolve release lifecycle
@@ -183,6 +194,7 @@ jobs:
   github-release:
     name: Create GitHub Release ${{ matrix.release.tag }}
     needs: [release-core, publish-maven-central]
+    if: always() && needs.release-core.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
