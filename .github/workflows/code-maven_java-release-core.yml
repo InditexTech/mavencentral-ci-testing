@@ -901,11 +901,11 @@ jobs:
           fi
           verifier="$RUNNER_TEMP/release-source-verifier"
           git init --quiet "$verifier"
-          git -C "$verifier" bundle verify "$bundle"
           if find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
             echo "::error title=Unexpected release workspace::Build distributions requires an empty workspace before materializing the handoff." >&2
             exit 1
           fi
+          git -C "$verifier" bundle verify "$bundle"
           git clone --no-checkout "$bundle" "$GITHUB_WORKSPACE"
           git -C "$GITHUB_WORKSPACE" checkout --detach "$EXPECTED_SOURCE_COMMIT"
           if [[ "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" != "$EXPECTED_SOURCE_COMMIT" ]]; then
