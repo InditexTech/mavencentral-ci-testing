@@ -37,21 +37,13 @@ jobs:
     name: Prepare Release
     if: >-
       (
-        github.event_name == 'workflow_dispatch' &&
-        (
-          (vars.DEVELOPMENT_FLOW == 'trunk-based-development' && (github.ref_name == 'main' || startsWith(github.ref_name, 'main-'))) ||
-          (vars.DEVELOPMENT_FLOW == 'git-flow' && (github.ref_name == 'main' || startsWith(github.ref_name, 'main-')))
-        )
+        github.event_name == 'workflow_dispatch'
       ) ||
       (
         github.event_name == 'pull_request' &&
         github.event.pull_request.merged &&
         github.event.pull_request.head.ref != 'automated/ci-governance-sync' &&
         !contains(join(github.event.pull_request.labels.*.name, ','), 'skip-release') &&
-        (
-          (vars.DEVELOPMENT_FLOW == 'trunk-based-development' && (github.event.pull_request.base.ref == 'main' || startsWith(github.event.pull_request.base.ref, 'main-'))) ||
-          (vars.DEVELOPMENT_FLOW == 'git-flow' && (github.event.pull_request.base.ref == 'main' || startsWith(github.event.pull_request.base.ref, 'main-')))
-        ) &&
         (
           contains(join(github.event.pull_request.labels.*.name, ','), 'release-type') ||
           vars.DEVELOPMENT_FLOW == 'trunk-based-development'
@@ -78,6 +70,8 @@ jobs:
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
           PR_MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
           REQUESTED_RELEASE_TYPE: ${{ inputs.release_type }}
+          DEVELOPMENT_FLOW: ${{ vars.DEVELOPMENT_FLOW }}
+          GIT_FLOW_RELEASE_BRANCH: ${{ vars.GIT_FLOW_RELEASE_BRANCH }}
         shell: bash
         run: |
           set -euo pipefail
@@ -90,6 +84,30 @@ jobs:
             baseline_branch="$PR_BASE_BRANCH"
             release_labels="$PR_LABELS"
             release_ref="$PR_MERGE_SHA"
+          fi
+
+          if [[ "$DEVELOPMENT_FLOW" == "trunk-based-development" ]]; then
+            release_branch="main"
+          elif [[ "$DEVELOPMENT_FLOW" == "git-flow" ]]; then
+            release_branch="$GIT_FLOW_RELEASE_BRANCH"
+          else
+            echo "::error title=Invalid development flow::DEVELOPMENT_FLOW must be trunk-based-development or git-flow."
+            exit 1
+          fi
+
+          if [[ -z "$release_branch" ]]; then
+            echo "::error title=Missing git-flow release branch::GIT_FLOW_RELEASE_BRANCH is required for git-flow releases."
+            exit 1
+          fi
+
+          if [[ "$baseline_branch" == "$release_branch"- ]]; then
+            echo "::error title=Invalid release branch::${baseline_branch} has no release suffix."
+            exit 1
+          fi
+
+          if [[ "$baseline_branch" != "$release_branch" && "$baseline_branch" != "$release_branch"-* ]]; then
+            echo "::error title=Invalid release branch::${baseline_branch} is not a configured release branch."
+            exit 1
           fi
 
           if [[ -z "$baseline_branch" || ! "$release_ref" =~ ^[0-9a-f]{40}$ ]]; then
@@ -161,6 +179,26 @@ jobs:
             exit 1
           fi
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
+
+      - name: Require pending CHANGELOG entries
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          changelog="CHANGELOG.md"
+          if [[ ! -f "$changelog" ]]; then
+            echo "::error title=Missing CHANGELOG::${WORKING_DIRECTORY}/CHANGELOG.md is required before a release."
+            exit 1
+          fi
+          if ! awk '
+            $0 ~ /^##[[:space:]]+\[Unreleased\][[:space:]]*$/ { unreleased = 1; next }
+            unreleased && $0 ~ /^##[[:space:]]/ { exit }
+            unreleased && $0 ~ /^[[:space:]]*([-*+]|\[[^]]+\]|[0-9]+\.)[[:space:]]+/ { entry = 1 }
+            END { exit !(unreleased && entry) }
+          ' "$changelog"; then
+            echo "::error title=Missing pending CHANGELOG entry::CHANGELOG.md must contain a substantive entry under ## [Unreleased]."
+            exit 1
+          fi
 
       - name: Resolve release lifecycle
         id: lifecycle
@@ -1237,6 +1275,8 @@ jobs:
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           BASELINE_BRANCH: ${{ github.event.pull_request.base.ref || github.ref_name }}
           DEVELOPMENT_FLOW: ${{ vars.DEVELOPMENT_FLOW }}
+          GIT_FLOW_RELEASE_BRANCH: ${{ vars.GIT_FLOW_RELEASE_BRANCH }}
+          GIT_FLOW_DEVELOPMENT_BRANCH: ${{ vars.GIT_FLOW_DEVELOPMENT_BRANCH }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASES: ${{ needs.prepare-release.outputs.releases }}
           RELEASE_COMMIT: ${{ needs.prepare-release.outputs.release_commit }}
@@ -1284,7 +1324,18 @@ jobs:
           fi
 
           version="$(jq -r '.[0].version' <<< "$RELEASES")"
-          develop_branch="${BASELINE_BRANCH/main/develop}"
+          if [[ -z "$GIT_FLOW_RELEASE_BRANCH" || -z "$GIT_FLOW_DEVELOPMENT_BRANCH" ]]; then
+            echo "::error title=Missing git-flow branch roles::GIT_FLOW_RELEASE_BRANCH and GIT_FLOW_DEVELOPMENT_BRANCH are required for git-flow release synchronization."
+            exit 1
+          fi
+          if [[ "$BASELINE_BRANCH" == "$GIT_FLOW_RELEASE_BRANCH" ]]; then
+            develop_branch="$GIT_FLOW_DEVELOPMENT_BRANCH"
+          elif [[ "$BASELINE_BRANCH" == "$GIT_FLOW_RELEASE_BRANCH"-* && "$BASELINE_BRANCH" != "$GIT_FLOW_RELEASE_BRANCH"- ]]; then
+            develop_branch="${GIT_FLOW_DEVELOPMENT_BRANCH}${BASELINE_BRANCH#"$GIT_FLOW_RELEASE_BRANCH"}"
+          else
+            echo "::error title=Invalid release branch::${BASELINE_BRANCH} is not a configured release branch."
+            exit 1
+          fi
           if [[ -z "$(git ls-remote --heads origin "$develop_branch")" ]]; then
             echo "::notice title=Sync skipped::$develop_branch does not exist."
             exit 0
