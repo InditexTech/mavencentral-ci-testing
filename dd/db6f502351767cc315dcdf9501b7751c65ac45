@@ -1,0 +1,43 @@
+.github/inditextech-ci-sync-manifest.json
+  s_a594d598c6ba5b::t_f984cacb1c8e2e 3-6,24,34-44,51-57,60,63-64
+.github/workflows/code-maven_java-PR_verify.yml
+  s_a594d598c6ba5b::t_80015c1a1b7c44 51-60,109,111
+.github/workflows/code-maven_java-build_snapshot.yml
+  s_a594d598c6ba5b::t_92444669fbfe23 74-83,196-205,258-264,267-268,273
+.github/workflows/code-maven_java-release-core.yml
+  s_a594d598c6ba5b::t_14e09518dd45ee 9-18,24-53,58-60,64-75,78,83,91-92,103,108,110,113-115,125-126,141-164,223-232,235-254,393,395-401,404-410,412,484,628,723-733,739-788,790,792-821,834-839,842,846,849,862-864,872-874,878-880,884-885,887,893-935,946-1004,1023-1032,1087-1140,1142-1155,1158-1166,1184,1224-1233,1279,1281-1284,1294,1300,1315,1319,1322,1328-1329,1331-1332,1377-1388,1408-1409,1418-1495
+.github/workflows/code-maven_java-release.yml
+  s_a594d598c6ba5b::t_9cdfb4713d6c5c 25,37,39-40,85-94,156,190-191,194-210,213
+.github/workflows/code-maven_java-sonarcloud-analysis.yml
+  s_a594d598c6ba5b::t_f430b1d9b31884 76-85,148-155,165-174,177-178,180-182,184-186,188-190,193-194,197-200
+.github/workflows/code-release_preview.yml
+  s_a594d598c6ba5b::t_a57efd4fc92014 36,62-71,116-118,181,183-189,191
+.github/workflows/codeql.yml
+  s_a594d598c6ba5b::t_e0e8c01c9cba31 46,62,64,66,77,79-80
+.github/workflows/pr-verify.yml
+  s_a594d598c6ba5b::t_446ea979cafb71 33
+.github/workflows/push-verify.yml
+  s_a594d598c6ba5b::t_f2c4b431adbf4c 34
+.github/workflows/scorecard-analysis.yml
+  s_a594d598c6ba5b::t_a1446fa83100dc 1-104
+.github/workflows/sync-to-develop.yml
+  s_a594d598c6ba5b::t_6df6fadce1a00c 26-27,29-78,80,89-91,96,100,105-106,152,162-172,194-201,203,207-233
+code/pom.xml
+  s_a594d598c6ba5b::t_225ea3dc358283 217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dddb6f502351767cc315dcdf9501b7751c65ac45",
+  "prompts": {},
+  "sessions": {
+    "s_a594d598c6ba5b": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "s_a594d598c6ba5b",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
