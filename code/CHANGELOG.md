@@ -7,16 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-09-15
+
 ### Fixed
 
-- `maven-release-plugin`'s `<configuration>` resolves ahead of any governance
-  `-D` flag, so this POM's own `<pushChanges>true</pushChanges>` silently voided
-  the engine's `-DpushChanges=false` and let `release:prepare` push the release
-  commit, the next-development commit and the tag straight to the baseline
-  branch before anything was built (observed on run `33869524982`, tag
-  `0.2.6`). The plugin's `<pushChanges>` is now `false`, matching the flag the
-  engine already passes, so the effective value no longer depends on which one
-  wins.
+- Set Maven Release Plugin `pushChanges` to `false` so governed promotion remains
+  the only baseline mutation path.
+
+## [0.2.8] - 2026-09-15
+
+### Changed
+
+- Validated the governed Maven Central canary release and GitFlow return path
+  after converging the Base and Java archetype sources.
+
+## [0.2.7] - 2026-09-11
+
+### Fixed
+
 - Reconciled the canary's development version with what is already published on
   Maven Central. `0.2.6-SNAPSHOT` had been consumed by a release whose artifacts
   reached Central, so the next release attempt collided with an immutable
@@ -96,7 +104,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configured distributionManagement for Maven Central snapshot repository
 - Excluded jacoco-report-aggregate module from deployment
 
-[Unreleased]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.5...HEAD
+[Unreleased]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.9...HEAD
+
+[0.2.9]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.8...0.2.9
+
+[0.2.8]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.7...0.2.8
+
+[0.2.7]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.5...0.2.7
 
 [0.2.5]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.4...0.2.5
 
