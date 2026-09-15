@@ -1,0 +1,19 @@
+.github/workflows/recover-maven-release-0.2.9.yml
+  s_826819d0f9f994::t_db590e37df44e5 1-152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cf11b634f39dcd0d6df376763e3d6b909e28b3b8",
+  "prompts": {},
+  "sessions": {
+    "s_826819d0f9f994": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "s_826819d0f9f994",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
