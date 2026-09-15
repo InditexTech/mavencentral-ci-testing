@@ -1,0 +1,45 @@
+.github/inditextech-ci-sync-manifest.json
+  s_8a662eae825c2a::t_8966c027da0e9b 3-6,24,34-44,51-57,60,63-64
+.github/workflows/code-maven_java-PR_verify.yml
+  s_8a662eae825c2a::t_a64f8ff572fedb 51-60,109,111
+.github/workflows/code-maven_java-build_snapshot.yml
+  s_8a662eae825c2a::t_9eeb2942a40590 74-83,196-205,258-264,267-268
+.github/workflows/code-maven_java-release-core.yml
+  s_8a662eae825c2a::t_de81484a5b3036 21-23,26,31,40,56,58,61-63,73-74,89-112,171-180,183-202,341,343-349,352-358,360,432,576,671-681,687-736,738,742-770,782-787,790,794,797,810-812,820-822,826-828,832-833,835,841-883,894-952,971-980,1035-1088,1090-1103,1106-1114,1173-1182,1226,1233,1244,1250,1265,1269,1272,1278-1279,1327-1338,1359,1368-1372
+.github/workflows/code-maven_java-release.yml
+  s_8a662eae825c2a::t_c5eebb5a08a187 25,38-39,84-93,196
+.github/workflows/code-maven_java-sonarcloud-analysis.yml
+  s_8a662eae825c2a::t_17e0ddcbdb1ca5 76-85,148-155,165-174,177-178,180-182,184-186,188-190,193-194,197-200
+.github/workflows/code-release_preview.yml
+  s_8a662eae825c2a::t_ba46effdb86d7d 36,62-71,116-118,181,183-189,191
+.github/workflows/codeql.yml
+  s_8a662eae825c2a::t_ec34b610f626fc 46,62,64,66,77,79-80
+.github/workflows/pr-verify.yml
+  s_8a662eae825c2a::t_6bcb9aad346f0f 33
+.github/workflows/push-verify.yml
+  s_8a662eae825c2a::t_1d52df46bbf850 34
+.github/workflows/scorecard-analysis.yml
+  s_8a662eae825c2a::t_80764b0c38c573 1-104
+.github/workflows/sync-to-develop.yml
+  s_8a662eae825c2a::t_7a2ad2b515aff5 26-27,29-78,80,89-91,96,100,105-106,152,162-172,194-201,203,207-233
+code/CHANGELOG.md
+  s_8a662eae825c2a::t_1b669d8ec3e611 10-19
+code/pom.xml
+  s_8a662eae825c2a::t_bb3d845c19ea00 217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9a9aa900a4dbd127bceaf9ef1bd2c463e41488d4",
+  "prompts": {},
+  "sessions": {
+    "s_8a662eae825c2a": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "s_8a662eae825c2a",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
