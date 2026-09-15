@@ -7,7 +7,6 @@ run-name: Publish Java release to Maven Central and GitHub from ${{ github.event
 on:
   pull_request:
     types: [closed]
-    branches: [main, main-*]
   workflow_dispatch:
     inputs:
       release_type:
@@ -23,6 +22,7 @@ on:
           - release-type/patch
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -34,8 +34,10 @@ jobs:
     name: Prepare and Build Release
     uses: ./.github/workflows/code-maven_java-release-core.yml
     with:
+      phase: prepare
       release_type: ${{ inputs.release_type }}
-    secrets: inherit
+    secrets:
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
 
   publish-maven-central:
     name: Publish ${{ matrix.release.tag }} to Maven Central
@@ -80,6 +82,16 @@ jobs:
               exit 1
               ;;
           esac
+          case "${WORKING_DIRECTORY:-}" in
+            ""|/*|..|../*|*/..|*/../*)
+              echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
+            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+            exit 1
+          fi
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Resolve release lifecycle
@@ -87,7 +99,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Publisher is descriptor-selected: govern-inject (default) = engine maven-central composite; delegated = POM's own release. Fail closed otherwise.
           descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
           mode="$(jq -r '.release.lifecycle // "govern-inject"' "$descriptor")"
           case "$mode" in
@@ -113,7 +124,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Reject any .tool-versions line that is not a strict "<plugin> <version>" before asdf reads it.
           if grep -Evq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+-]+$' .tool-versions; then
             echo "::error title=Invalid tool-versions::${WORKING_DIRECTORY}/.tool-versions is malformed."
             exit 1
@@ -137,14 +147,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Emit the asdf JDK as a step output so only the Maven build uses the consumer JDK; other steps keep the pinned Java 25.
           echo "java_home=$(asdf where java)" >> "$GITHUB_OUTPUT"
 
       - name: Deploy release to Maven Central
         if: steps.lifecycle.outputs.mode != 'delegated'
         env:
           JAVA_HOME: ${{ steps.jdk.outputs.java_home }}
-        uses: InditexTech/gh-actions/maven-central@7138f88b2fa8e90318bcb4bf5f9ce6c147b13d2f # v1.0.0
+        uses: InditexTech/gh-actions/maven-central@058af96d9998ca2187f0a908f6aca1ce0bdbe026 # v1.1.1
         with:
           working-directory: ${{ vars.WORKING_DIRECTORY }}
           project-type: ${{ env.PROJECT_TYPE }}
@@ -161,7 +170,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Delegated: deploy the already-checked-out GA tag tree directly (POM binds central-publishing + gpg to deploy); release:perform can't rebuild the checkout cross-job. -DskipEnforceSnapshots: GA is not -SNAPSHOT.
           settings="$RUNNER_TEMP/java-central-settings.xml"
           cat > "$settings" <<'XML'
           <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
@@ -179,13 +187,30 @@ jobs:
             printf '%s' "$CI_GPG_SECRET_KEY" | gpg --batch --import
           fi
 
-          mvn -B --no-transfer-progress -s "$settings" -f pom.xml \
-            -DskipTests -DskipEnforceSnapshots \
+          command mvn -B --no-transfer-progress -s "$settings" -f pom.xml \
+            -DskipTests -DskipEnforceSnapshots -Dmaven.deploy.skip=false -DwaitUntil=published \
             clean deploy
+
+  finalize-release:
+    name: Finalize release (promote + next dev)
+    needs: [release-core, publish-maven-central]
+    if: always() && needs.release-core.result == 'success'
+    uses: ./.github/workflows/code-maven_java-release-core.yml
+    with:
+      phase: finalize
+      promote: ${{ needs.publish-maven-central.result == 'success' }}
+      release_commit: ${{ needs.release-core.outputs.release_commit }}
+      promote_commit: ${{ needs.release-core.outputs.promote_commit }}
+      releases: ${{ needs.release-core.outputs.releases }}
+      expected_ref: ${{ needs.release-core.outputs.expected_ref }}
+      staging_ref: ${{ needs.release-core.outputs.staging_ref }}
+      staged_tag_ref: ${{ needs.release-core.outputs.staged_tag_ref }}
+    secrets:
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
 
   github-release:
     name: Create GitHub Release ${{ matrix.release.tag }}
-    needs: [release-core, publish-maven-central]
+    needs: [release-core, publish-maven-central, finalize-release]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

@@ -71,6 +71,16 @@ jobs:
               exit 1
               ;;
           esac
+          case "${WORKING_DIRECTORY:-}" in
+            ""|/*|..|../*|*/..|*/../*)
+              echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
+            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+            exit 1
+          fi
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Set up workflow Java
@@ -87,7 +97,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Reject any .tool-versions line that is not a strict "<plugin> <version>" before asdf reads it.
           if grep -Evq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+-]+$' .tool-versions; then
             echo "::error title=Invalid tool-versions::${WORKING_DIRECTORY}/.tool-versions is malformed."
             exit 1
@@ -111,7 +120,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Emit the asdf JDK as a step output so only the Maven build uses the consumer JDK; other steps keep the pinned Java 25.
           echo "java_home=$(asdf where java)" >> "$GITHUB_OUTPUT"
 
       - name: Verify snapshot candidate
@@ -123,13 +131,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Snapshot deploy is opt-in per descriptor (release.snapshot_publish, default off); absent/false = verified but not deployed.
           descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
           snapshot_optin="$(jq -r '.release.snapshot_publish // false' "$descriptor")"
 
           publish_snapshot=false
           if [[ "$snapshot_optin" == "true" && "$GITHUB_EVENT_NAME" == "push" ]]; then
-            # Skip the redundant snapshot from release-bot commits; key on the <slug>[bot] committer (not subject) so it holds for govern-inject + delegated.
             committer_email="$(git -C "$GITHUB_WORKSPACE" show -s --format=%ae HEAD)"
             if [[ "$committer_email" == *"[bot]@users.noreply.github.com" ]]; then
               echo "::notice title=Snapshot skipped::Release-bot commit does not need a snapshot."
@@ -139,7 +145,6 @@ jobs:
           fi
           echo "publish_snapshot=$publish_snapshot" >> "$GITHUB_OUTPUT"
 
-          # Always verify the snapshot candidate; the published version is the POM's -SNAPSHOT (Portal timestamps each deploy; no version munging).
           case "$PROJECT_TYPE" in
             single|monorepo)
               mvn -B --no-transfer-progress -f pom.xml clean verify
@@ -188,6 +193,16 @@ jobs:
               exit 1
               ;;
           esac
+          case "${WORKING_DIRECTORY:-}" in
+            ""|/*|..|../*|*/..|*/../*)
+              echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
+            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+            exit 1
+          fi
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Set up workflow Java
@@ -204,7 +219,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Reject any .tool-versions line that is not a strict "<plugin> <version>" before asdf reads it.
           if grep -Evq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+-]+$' .tool-versions; then
             echo "::error title=Invalid tool-versions::${WORKING_DIRECTORY}/.tool-versions is malformed."
             exit 1
@@ -228,7 +242,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Emit the asdf JDK as a step output so only the Maven build uses the consumer JDK; other steps keep the pinned Java 25.
           echo "java_home=$(asdf where java)" >> "$GITHUB_OUTPUT"
 
       - name: Resolve publishable modules
@@ -237,30 +250,27 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$PROJECT_TYPE" != "monorepo" ]]; then
-            # A single reactor deploys as a whole; the composite rejects a populated packages for single.
             echo "packages=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # artifact_id mirrors the adapter's _artifact_id(): map raw descriptor package names to the reactor's module slug (= flat dir name).
-          artifact_id() {
-            printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
-          }
           descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
-          packages=""
-          while IFS= read -r package; do
-            packages="${packages:+$packages,}$(artifact_id "$package")"
-          done < <(jq -er '.release.packages[]' "$descriptor")
-          if [[ -z "$packages" ]]; then
-            echo "::error title=Invalid descriptor::No publishable modules resolved from .release.packages."
+          strategy="$(jq -er '.release.strategy' "$descriptor")"
+          if [[ "$strategy" == "locked-step" ]]; then
+            echo "packages=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$strategy" != "independent" ]]; then
+            echo "::error title=Invalid release strategy::Monorepos must declare release.strategy as locked-step or independent."
             exit 1
           fi
-          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          echo "::error title=Unsupported independent snapshot::Independent Maven monorepo snapshots require InditexTech/gh-actions#10."
+          exit 1
 
       - name: Deploy snapshot to Maven Central
         env:
           JAVA_HOME: ${{ steps.jdk.outputs.java_home }}
-        uses: InditexTech/gh-actions/maven-central@7138f88b2fa8e90318bcb4bf5f9ce6c147b13d2f # v1.0.0
+        uses: InditexTech/gh-actions/maven-central@058af96d9998ca2187f0a908f6aca1ce0bdbe026 # v1.1.1
         with:
           working-directory: ${{ vars.WORKING_DIRECTORY }}
           project-type: ${{ env.PROJECT_TYPE }}
