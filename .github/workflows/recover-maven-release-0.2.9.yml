@@ -57,6 +57,7 @@ jobs:
               echo "::error title=Invalid staging refs::Staging refs do not match the signed release provenance."
               exit 1
             fi
+            git fetch --no-tags origin "${STAGED_TAG_REF}:${STAGED_TAG_REF}"
           elif [[ -n "$(git ls-remote --tags origin "refs/tags/${RELEASE_TAG}^{}" | cut -f1)" ]]; then
             echo "Staging refs were already cleaned after a prior recovery attempt."
           else
