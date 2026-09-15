@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-09-15
+
 ### Changed
 
 - Validated the governed Maven Central canary release and GitFlow return path
@@ -95,7 +97,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configured distributionManagement for Maven Central snapshot repository
 - Excluded jacoco-report-aggregate module from deployment
 
-[Unreleased]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.7...HEAD
+[Unreleased]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.8...HEAD
+
+[0.2.8]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.7...0.2.8
 
 [0.2.7]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.5...0.2.7
 
