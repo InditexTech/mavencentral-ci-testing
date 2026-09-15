@@ -18,12 +18,17 @@ on:
       releases:
         description: JSON array of release tags, versions, module lists, and next-dev versions.
         value: ${{ jobs.prepare-release.outputs.releases }}
+    secrets:
+      APP_PRIVATE_KEY:
+        required: true
 
 permissions:
+  actions: read
   contents: read
 
 env:
   CI_GOVERNANCE_RELEASE_STAGING_REF: refs/ci-governance/release/${{ github.run_id }}-${{ github.run_attempt }}
+  CI_GOVERNANCE_RELEASE_TAG_STAGING_REF: refs/ci-governance/release-tag/${{ github.run_id }}-${{ github.run_attempt }}
   WORKING_DIRECTORY: ${{ vars.WORKING_DIRECTORY }}
   ASDF_BRANCH_VERSION: '0.18.0'
 
@@ -32,21 +37,13 @@ jobs:
     name: Prepare Release
     if: >-
       (
-        github.event_name == 'workflow_dispatch' &&
-        (
-          (vars.DEVELOPMENT_FLOW == 'trunk-based-development' && (github.ref_name == 'main' || startsWith(github.ref_name, 'main-'))) ||
-          (vars.DEVELOPMENT_FLOW == 'git-flow' && (github.ref_name == 'main' || startsWith(github.ref_name, 'main-')))
-        )
+        github.event_name == 'workflow_dispatch'
       ) ||
       (
         github.event_name == 'pull_request' &&
         github.event.pull_request.merged &&
         github.event.pull_request.head.ref != 'automated/ci-governance-sync' &&
         !contains(join(github.event.pull_request.labels.*.name, ','), 'skip-release') &&
-        (
-          (vars.DEVELOPMENT_FLOW == 'trunk-based-development' && (github.event.pull_request.base.ref == 'main' || startsWith(github.event.pull_request.base.ref, 'main-'))) ||
-          (vars.DEVELOPMENT_FLOW == 'git-flow' && (github.event.pull_request.base.ref == 'main' || startsWith(github.event.pull_request.base.ref, 'main-')))
-        ) &&
         (
           contains(join(github.event.pull_request.labels.*.name, ','), 'release-type') ||
           vars.DEVELOPMENT_FLOW == 'trunk-based-development'
@@ -56,10 +53,14 @@ jobs:
     timeout-minutes: 30
     outputs:
       release_commit: ${{ steps.release-metadata.outputs.release_commit }}
+      promote_commit: ${{ steps.release-metadata.outputs.promote_commit }}
       releases: ${{ steps.release-metadata.outputs.releases }}
-      expected_ref: ${{ steps.release-plan.outputs.expected_ref }}
+      expected_ref: ${{ steps.release-metadata.outputs.expected_ref }}
       lifecycle_mode: ${{ steps.lifecycle.outputs.mode }}
       staging_ref: ${{ steps.release-metadata.outputs.staging_ref }}
+      staged_tag_ref: ${{ steps.release-metadata.outputs.staged_tag_ref }}
+      release_source_artifact: ${{ steps.release-source-handoff.outputs.artifact_name }}
+      release_source_sha256: ${{ steps.release-source-handoff.outputs.bundle_sha256 }}
     steps:
       - name: Resolve release context
         id: release-context
@@ -69,6 +70,8 @@ jobs:
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
           PR_MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
           REQUESTED_RELEASE_TYPE: ${{ inputs.release_type }}
+          DEVELOPMENT_FLOW: ${{ vars.DEVELOPMENT_FLOW }}
+          GIT_FLOW_RELEASE_BRANCH: ${{ vars.GIT_FLOW_RELEASE_BRANCH }}
         shell: bash
         run: |
           set -euo pipefail
@@ -81,6 +84,30 @@ jobs:
             baseline_branch="$PR_BASE_BRANCH"
             release_labels="$PR_LABELS"
             release_ref="$PR_MERGE_SHA"
+          fi
+
+          if [[ "$DEVELOPMENT_FLOW" == "trunk-based-development" ]]; then
+            release_branch="main"
+          elif [[ "$DEVELOPMENT_FLOW" == "git-flow" ]]; then
+            release_branch="$GIT_FLOW_RELEASE_BRANCH"
+          else
+            echo "::error title=Invalid development flow::DEVELOPMENT_FLOW must be trunk-based-development or git-flow."
+            exit 1
+          fi
+
+          if [[ -z "$release_branch" ]]; then
+            echo "::error title=Missing git-flow release branch::GIT_FLOW_RELEASE_BRANCH is required for git-flow releases."
+            exit 1
+          fi
+
+          if [[ "$baseline_branch" == "$release_branch"- ]]; then
+            echo "::error title=Invalid release branch::${baseline_branch} has no release suffix."
+            exit 1
+          fi
+
+          if [[ "$baseline_branch" != "$release_branch" && "$baseline_branch" != "$release_branch"-* ]]; then
+            echo "::error title=Invalid release branch::${baseline_branch} is not a configured release branch."
+            exit 1
           fi
 
           if [[ -z "$baseline_branch" || ! "$release_ref" =~ ^[0-9a-f]{40}$ ]]; then
@@ -141,7 +168,37 @@ jobs:
               exit 1
               ;;
           esac
+          case "${WORKING_DIRECTORY:-}" in
+            ""|/*|..|../*|*/..|*/../*)
+              echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
+            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+            exit 1
+          fi
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
+
+      - name: Require pending CHANGELOG entries
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          changelog="CHANGELOG.md"
+          if [[ ! -f "$changelog" ]]; then
+            echo "::error title=Missing CHANGELOG::${WORKING_DIRECTORY}/CHANGELOG.md is required before a release."
+            exit 1
+          fi
+          if ! awk '
+            $0 ~ /^##[[:space:]]+\[Unreleased\][[:space:]]*$/ { unreleased = 1; next }
+            unreleased && $0 ~ /^##[[:space:]]/ { exit }
+            unreleased && $0 ~ /^[[:space:]]*([-*+]|\[[^]]+\]|[0-9]+\.)[[:space:]]+/ { entry = 1 }
+            END { exit !(unreleased && entry) }
+          ' "$changelog"; then
+            echo "::error title=Missing pending CHANGELOG entry::CHANGELOG.md must contain a substantive entry under ## [Unreleased]."
+            exit 1
+          fi
 
       - name: Resolve release lifecycle
         id: lifecycle
@@ -281,19 +338,26 @@ jobs:
             printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
           }
           strip_snapshot() { printf '%s' "${1%-SNAPSHOT}"; }
+          # Resolve declared Maven artifactIds through the reactor.
           read_version() {
-            local pom="pom.xml"
-            [[ -n "$1" ]] && pom="$1/pom.xml"
-            mvn -q -B --no-transfer-progress -f "$pom" \
-              help:evaluate -Dexpression=project.version -DforceStdout
+            if [[ -n "$1" ]]; then
+              mvn -q -B --no-transfer-progress -f pom.xml -pl ":$1" \
+                help:evaluate -Dexpression=project.version -DforceStdout
+            else
+              mvn -q -B --no-transfer-progress -f pom.xml \
+                help:evaluate -Dexpression=project.version -DforceStdout
+            fi
           }
           read_artifact() {
-            local pom="pom.xml"
-            [[ -n "$1" ]] && pom="$1/pom.xml"
-            mvn -q -B --no-transfer-progress -f "$pom" \
-              help:evaluate -Dexpression=project.artifactId -DforceStdout
+            if [[ -n "$1" ]]; then
+              mvn -q -B --no-transfer-progress -f pom.xml -pl ":$1" \
+                help:evaluate -Dexpression=project.artifactId -DforceStdout
+            else
+              mvn -q -B --no-transfer-progress -f pom.xml \
+                help:evaluate -Dexpression=project.artifactId -DforceStdout
+            fi
           }
-          bump_semver() {  # <X.Y.Z> <major|minor|patch>
+          bump_semver() {
             local major minor patch
             IFS=. read -r major minor patch <<< "$1"
             case "$2" in
@@ -361,13 +425,11 @@ jobs:
               fi
               version="${versions[0]}"
               next_dev="$(bump_semver "$version" "$release_bump")-SNAPSHOT"
-              modules_json="$(printf '%s\n' "${modules[@]}" | jq -R . | jq -sc .)"
               jq -cn \
-                --argjson packages "$modules_json" \
                 --arg version "$version" \
                 --arg tag "$version" \
                 --arg next_dev "$next_dev" \
-                '{packages: $packages, version: $version, tag: $tag, next_dev: $next_dev}' >> "$records_file"
+                '{packages: [], version: $version, tag: $tag, next_dev: $next_dev}' >> "$records_file"
               return
             fi
 
@@ -497,7 +559,6 @@ jobs:
             git check-ref-format --allow-onelevel "refs/tags/$(jq -r '.tag' <<< "$record")"
           done < <(jq -c '.[]' <<< "$RELEASES")
 
-          # Stage the commit on a non-branch ref: build needs it fetchable, main must not move yet.
           git push --atomic --force origin "HEAD:$CI_GOVERNANCE_RELEASE_STAGING_REF"
 
       - name: Plan delegated release
@@ -512,7 +573,7 @@ jobs:
         run: |
           set -euo pipefail
           strip_snapshot() { printf '%s' "${1%-SNAPSHOT}"; }
-          bump_semver() {  # <X.Y.Z> <major|minor|patch>
+          bump_semver() {
             local major minor patch
             IFS=. read -r major minor patch <<< "$1"
             case "$2" in
@@ -607,15 +668,105 @@ jobs:
 
           git -C "$GITHUB_WORKSPACE" checkout -B "$BASELINE_BRANCH"
 
+          packages_json='[]'
+          if [[ "$PROJECT_TYPE" == "monorepo" ]]; then
+            descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
+            packages_json="$(jq -c '[(.release.packages // [])[] | ascii_downcase
+              | gsub("[^a-z0-9]+"; "-") | gsub("^-+|-+$"; "")]' "$descriptor")"
+            if [[ "$(jq -r 'length' <<< "$packages_json")" -eq 0 ]]; then
+              echo "::error title=No release packages::A monorepo must declare release.packages in .github/inditextech-ci-java.json." >&2
+              exit 1
+            fi
+          fi
+
           git -C "$GITHUB_WORKSPACE" add -- "$WORKING_DIRECTORY/CHANGELOG.md"
           if ! git -C "$GITHUB_WORKSPACE" diff --cached --quiet; then
             git -C "$GITHUB_WORKSPACE" commit -m "[java-release] Consume changelog for release $RELEASE_VERSION"
           fi
 
-          mvn -B --no-transfer-progress -f pom.xml \
+          baseline_before="$(git -C "$GITHUB_WORKSPACE" ls-remote origin "refs/heads/$BASELINE_BRANCH" | cut -f1)"
+          git -C "$GITHUB_WORKSPACE" ls-remote --tags origin \
+            | awk '{print $2}' | sort > "$RUNNER_TEMP/origin-tags-before.txt"
+
+          real_git="$(command -v git)"
+          interposer_dir="$(mktemp -d "$RUNNER_TEMP/ci-governance-git-interposer.XXXXXX")"
+          interposer_log="$RUNNER_TEMP/ci-governance-git-interposer-blocked.log"
+          : > "$interposer_log"
+          cat > "$interposer_dir/git" <<'GIT_SHIM'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          subcommand=""
+          skip_next="false"
+          for arg in "$@"; do
+            if [[ "$skip_next" == "true" ]]; then
+              skip_next="false"
+              continue
+            fi
+            case "$arg" in
+              -C|-c|--git-dir|--work-tree|--namespace|--super-prefix|--exec-path|--config-env)
+                skip_next="true"
+                ;;
+              --git-dir=*|--work-tree=*|--namespace=*|--super-prefix=*|--exec-path=*|--config-env=*)
+                ;;
+              -*)
+                ;;
+              *)
+                subcommand="$arg"
+                break
+                ;;
+            esac
+          done
+          if [[ "$subcommand" == "push" ]]; then
+            {
+              printf 'blocked: git'
+              for arg in "$@"; do
+                printf ' %q' "$arg"
+              done
+              printf '\n'
+            } >> "$CI_GOVERNANCE_GIT_INTERPOSER_LOG"
+            exit 0
+          fi
+          exec "$CI_GOVERNANCE_REAL_GIT" "$@"
+          GIT_SHIM
+          chmod +x "$interposer_dir/git"
+
+          CI_GOVERNANCE_REAL_GIT="$real_git" \
+            CI_GOVERNANCE_GIT_INTERPOSER_LOG="$interposer_log" \
+            PATH="$interposer_dir:$PATH" \
+            mvn -B --no-transfer-progress -f pom.xml \
             release:clean release:prepare \
+            -DpushChanges=false \
             -DdevelopmentVersion="$NEXT_DEV" \
             -Darguments="-DskipTests"
+
+          if [[ -s "$interposer_log" ]]; then
+            while IFS= read -r blocked_line; do
+              echo "::notice title=Blocked plugin push::$blocked_line"
+            done < "$interposer_log"
+          fi
+
+          baseline_after="$(git -C "$GITHUB_WORKSPACE" ls-remote origin "refs/heads/$BASELINE_BRANCH" | cut -f1)"
+          git -C "$GITHUB_WORKSPACE" ls-remote --tags origin \
+            | awk '{print $2}' | sort > "$RUNNER_TEMP/origin-tags-after.txt"
+          leaked_refs=()
+          while IFS= read -r ref; do
+            [[ -n "$ref" ]] && leaked_refs+=("$ref")
+          done < <(comm -13 "$RUNNER_TEMP/origin-tags-before.txt" "$RUNNER_TEMP/origin-tags-after.txt")
+
+          if [[ "$baseline_after" != "$baseline_before" || "${#leaked_refs[@]}" -ne 0 ]]; then
+            for ref in "${leaked_refs[@]}"; do
+              git -C "$GITHUB_WORKSPACE" push origin --delete "$ref" \
+                || echo "::warning title=Tag rollback failed::Could not delete $ref from origin."
+            done
+            if [[ "$baseline_after" != "$baseline_before" ]]; then
+              git -C "$GITHUB_WORKSPACE" push \
+                --force-with-lease="refs/heads/$BASELINE_BRANCH:$baseline_after" \
+                origin "$baseline_before:refs/heads/$BASELINE_BRANCH" \
+                || echo "::warning title=Baseline rollback failed::$BASELINE_BRANCH still carries commits release:prepare pushed; reset it to $baseline_before by hand."
+            fi
+            echo "::error title=Release published before it was built::maven-release-plugin wrote to origin during prepare-release despite the engine's git interposer. Treat this as an interposer bypass and escalate to the CI governance engine owners." >&2
+            exit 1
+          fi
 
           git -C "$GITHUB_WORKSPACE" tag --list | sort > "$RUNNER_TEMP/java-tags-after.txt"
           new_tags=()
@@ -628,14 +779,22 @@ jobs:
           fi
           release_tag="${new_tags[0]}"
           release_commit="$(git -C "$GITHUB_WORKSPACE" rev-list -n 1 "$release_tag")"
+          promote_commit="$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
+
+          git -C "$GITHUB_WORKSPACE" push --atomic --force origin \
+            "HEAD:$CI_GOVERNANCE_RELEASE_STAGING_REF" \
+            "refs/tags/$release_tag:$CI_GOVERNANCE_RELEASE_TAG_STAGING_REF"
+          git -C "$GITHUB_WORKSPACE" tag -d "$release_tag"
 
           releases="$(jq -cn \
+            --argjson packages "$packages_json" \
             --arg version "$RELEASE_VERSION" \
             --arg tag "$release_tag" \
             --arg next_dev "$NEXT_DEV" \
-            '[{packages: [], version: $version, tag: $tag, next_dev: $next_dev}]')"
+            '[{packages: $packages, version: $version, tag: $tag, next_dev: $next_dev}]')"
           {
             echo "release_commit=$release_commit"
+            echo "promote_commit=$promote_commit"
             echo "releases<<EOF"
             printf '%s\n' "$releases"
             echo "EOF"
@@ -648,6 +807,9 @@ jobs:
           RELEASES: ${{ steps.release-plan.outputs.releases_intermediate }}
           DELEGATED_RELEASES: ${{ steps.delegated-release.outputs.releases }}
           DELEGATED_RELEASE_COMMIT: ${{ steps.delegated-release.outputs.release_commit }}
+          DELEGATED_PROMOTE_COMMIT: ${{ steps.delegated-release.outputs.promote_commit }}
+          BASELINE_BRANCH: ${{ steps.release-context.outputs.baseline_branch }}
+          PLAN_EXPECTED_REF: ${{ steps.release-plan.outputs.expected_ref }}
         working-directory: ${{ env.WORKING_DIRECTORY }}
         shell: bash
         run: |
@@ -655,17 +817,69 @@ jobs:
           if [[ "$LIFECYCLE_MODE" == "delegated" ]]; then
             release_commit="$DELEGATED_RELEASE_COMMIT"
             release_records="$DELEGATED_RELEASES"
+            promote_commit="$DELEGATED_PROMOTE_COMMIT"
+            expected_ref="refs/heads/$BASELINE_BRANCH"
+            staged_tag_ref="$CI_GOVERNANCE_RELEASE_TAG_STAGING_REF"
           else
             release_commit="$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
             release_records="$RELEASES"
+            promote_commit="$release_commit"
+            expected_ref="$PLAN_EXPECTED_REF"
+            staged_tag_ref=""
           fi
           {
             echo "release_commit=$release_commit"
+            echo "promote_commit=$promote_commit"
+            echo "expected_ref=$expected_ref"
             echo "staging_ref=$CI_GOVERNANCE_RELEASE_STAGING_REF"
+            echo "staged_tag_ref=$staged_tag_ref"
             echo "releases<<EOF"
             printf '%s\n' "$release_records"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Create release source handoff
+        id: release-source-handoff
+        env:
+          SOURCE_COMMIT: ${{ steps.release-metadata.outputs.release_commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] \
+            || ! git -C "$GITHUB_WORKSPACE" cat-file -e "$SOURCE_COMMIT^{commit}"; then
+            echo "::error title=Invalid release source::Release metadata did not provide a local immutable commit." >&2
+            exit 1
+          fi
+          handoff_dir="$RUNNER_TEMP/release-source"
+          bundle="$handoff_dir/release.bundle"
+          metadata="$handoff_dir/release-metadata.json"
+          artifact_name="java-release-source-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$handoff_dir"
+          git -C "$GITHUB_WORKSPACE" bundle create --version=2 "$bundle" --all "$SOURCE_COMMIT"
+          git -C "$GITHUB_WORKSPACE" bundle verify "$bundle"
+          bundle_sha256="$(sha256sum "$bundle" | awk '{print $1}')"
+          jq -n \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg source_commit "$SOURCE_COMMIT" \
+            --arg bundle_sha256 "$bundle_sha256" \
+            --arg artifact_name "$artifact_name" \
+            '{run_id: $run_id, run_attempt: $run_attempt, source_commit: $source_commit, bundle_sha256: $bundle_sha256, bundle_format: "git-bundle-v2", artifact_name: $artifact_name}' \
+            > "$metadata"
+          {
+            echo "artifact_name=$artifact_name"
+            echo "bundle_sha256=$bundle_sha256"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload release source handoff
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.release-source-handoff.outputs.artifact_name }}
+          path: |
+            ${{ runner.temp }}/release-source/release.bundle
+            ${{ runner.temp }}/release-source/release-metadata.json
+          if-no-files-found: error
+          retention-days: 14
 
   build-distributions:
     name: Build ${{ matrix.release.tag }}
@@ -677,11 +891,65 @@ jobs:
       matrix:
         release: ${{ fromJSON(needs.prepare-release.outputs.releases) }}
     steps:
-      - name: Check out release commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ needs.prepare-release.outputs.release_commit }}
+      - name: Download release source handoff
+        env:
+          EXPECTED_ARTIFACT: ${{ needs.prepare-release.outputs.release_source_artifact }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$GITHUB_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$EXPECTED_ARTIFACT" \
+            --dir "$RUNNER_TEMP/release-source"
+
+      - name: Verify and materialize release source
+        env:
+          EXPECTED_RUN_ID: ${{ github.run_id }}
+          EXPECTED_RUN_ATTEMPT: ${{ github.run_attempt }}
+          EXPECTED_SOURCE_COMMIT: ${{ needs.prepare-release.outputs.release_commit }}
+          EXPECTED_BUNDLE_SHA256: ${{ needs.prepare-release.outputs.release_source_sha256 }}
+          EXPECTED_ARTIFACT: ${{ needs.prepare-release.outputs.release_source_artifact }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/release-source/release.bundle"
+          metadata="$RUNNER_TEMP/release-source/release-metadata.json"
+          if [[ ! -f "$bundle" || ! -f "$metadata" ]] \
+            || [[ ! "$EXPECTED_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] \
+            || [[ ! "$EXPECTED_BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error title=Invalid release source handoff::The release bundle or its immutable metadata is missing." >&2
+            exit 1
+          fi
+          if ! jq -e \
+            --arg run_id "$EXPECTED_RUN_ID" \
+            --arg run_attempt "$EXPECTED_RUN_ATTEMPT" \
+            --arg source_commit "$EXPECTED_SOURCE_COMMIT" \
+            --arg bundle_sha256 "$EXPECTED_BUNDLE_SHA256" \
+            --arg artifact_name "$EXPECTED_ARTIFACT" \
+            'type == "object" and .run_id == $run_id and .run_attempt == $run_attempt and .source_commit == $source_commit and .bundle_sha256 == $bundle_sha256 and .bundle_format == "git-bundle-v2" and .artifact_name == $artifact_name' \
+            "$metadata" > /dev/null; then
+            echo "::error title=Invalid release source handoff::Release source metadata does not match this run." >&2
+            exit 1
+          fi
+          actual_bundle_sha256="$(sha256sum "$bundle" | awk '{print $1}')"
+          if [[ "$actual_bundle_sha256" != "$EXPECTED_BUNDLE_SHA256" ]]; then
+            echo "::error title=Release source digest mismatch::The downloaded release bundle does not match its prepared digest." >&2
+            exit 1
+          fi
+          verifier="$RUNNER_TEMP/release-source-verifier"
+          git init --quiet "$verifier"
+          if find "$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
+            echo "::error title=Unexpected release workspace::Build distributions requires an empty workspace before materializing the handoff." >&2
+            exit 1
+          fi
+          git -C "$verifier" bundle verify "$bundle"
+          git clone --no-checkout "$bundle" "$GITHUB_WORKSPACE"
+          git -C "$GITHUB_WORKSPACE" checkout --detach "$EXPECTED_SOURCE_COMMIT"
+          if [[ "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" != "$EXPECTED_SOURCE_COMMIT" ]]; then
+            echo "::error title=Release source commit mismatch::The materialized source is not the prepared release commit." >&2
+            exit 1
+          fi
 
       - name: Resolve governed project type
         shell: bash
@@ -700,6 +968,16 @@ jobs:
               exit 1
               ;;
           esac
+          case "${WORKING_DIRECTORY:-}" in
+            ""|/*|..|../*|*/..|*/../*)
+              echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
+            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+            exit 1
+          fi
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Set up workflow Java
@@ -754,19 +1032,86 @@ jobs:
           mkdir -p "$dist"
           mvn -B --no-transfer-progress -f pom.xml -DskipTests -DskipEnforceSnapshots clean package
 
-          if [[ "$(jq -r '.packages | length' <<< "$RELEASE")" -gt 0 ]]; then
-            while IFS= read -r module; do
-              cp "$module"/target/*.jar "$dist"/ 2>/dev/null || true
-            done < <(jq -r '.packages[]' <<< "$RELEASE")
-          elif [[ "$PROJECT_TYPE" == "single" ]]; then
-            cp target/*.jar "$dist"/ 2>/dev/null || true
+          descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
+          declared="$(jq -r '.release.artifacts // [] | .[]' "$descriptor")"
+          artifact_ids="$(jq -c '.packages' <<< "$RELEASE")"
+          if [[ "$PROJECT_TYPE" == "monorepo" ]] \
+            && [[ "$(jq -r 'length' <<< "$artifact_ids")" -eq 0 ]] \
+            && [[ "$(jq -r '.release.strategy // empty' "$descriptor")" == "locked-step" ]]; then
+            artifact_ids="$(jq -c '[(.release.packages // [])[] | ascii_downcase
+              | gsub("[^a-z0-9]+"; "-") | gsub("^-+|-+$"; "")]' "$descriptor")"
           fi
 
-          # A single reactor deploys as a whole, so its jars may live in modules rather than at the root.
-          if ! ls "$dist"/*.jar > /dev/null 2>&1; then
-            while IFS= read -r jar; do
-              cp "$jar" "$dist"/ 2>/dev/null || true
-            done < <(find . -type f -path '*/target/*.jar')
+          is_release_distribution() {
+            case "$(basename "$1")" in
+              *-tests.jar|*-sources.jar|*-javadoc.jar) return 1 ;;
+            esac
+            [[ -f "$1" && "$1" == *.jar ]]
+          }
+
+          if [[ -n "$declared" ]]; then
+            shopt -s nullglob
+            root="$PWD"
+            while IFS= read -r pattern; do
+              [[ -n "$pattern" ]] || continue
+              case "$pattern" in
+                /*|*'**'*|*..*)
+                  echo "::error title=Invalid release artifact::release.artifacts entry '$pattern' must be a relative path inside the working directory, without '..' or '**'."
+                  exit 1
+                  ;;
+              esac
+              saved_ifs="$IFS"
+              IFS=
+              # shellcheck disable=SC2206
+              matches=($pattern)
+              IFS="$saved_ifs"
+              selected=0
+              for match in ${matches[@]+"${matches[@]}"}; do
+                [[ -f "$match" && "$match" == *.jar ]] || continue
+                resolved="$(cd "$(dirname "$match")" && pwd -P)/$(basename "$match")"
+                case "$resolved" in
+                  "$root"/*) ;;
+                  *)
+                    echo "::error title=Invalid release artifact::release.artifacts entry '$pattern' resolved outside the working directory."
+                    exit 1
+                    ;;
+                esac
+                cp "$resolved" "$dist"/
+                selected=$((selected + 1))
+              done
+              if [[ "$selected" -eq 0 ]]; then
+                echo "::error title=Unmatched release artifact::release.artifacts entry '$pattern' matched no jar."
+                exit 1
+              fi
+            done <<< "$declared"
+          elif [[ "$(jq -r 'length' <<< "$artifact_ids")" -gt 0 ]]; then
+            release_version="$(jq -r '.version // .tag' <<< "$RELEASE")"
+            while IFS= read -r module; do
+              [[ -n "$module" ]] || continue
+              selected=0
+              # Select the module JAR by Maven artifactId at arbitrary depth.
+              while IFS= read -r jar; do
+                is_release_distribution "$jar" || continue
+                cp "$jar" "$dist"/
+                selected=$((selected + 1))
+              done < <(find . -type f \
+                -path "*/target/${module}-${release_version}.jar")
+              if [[ "$selected" -eq 0 ]]; then
+                echo "::error title=Undeclared release artifacts::Module '$module' is published but produced no ${module}-${release_version}.jar, so the assets to attach cannot be inferred. Declare release.artifacts in .github/inditextech-ci-java.json."
+                exit 1
+              fi
+            done < <(jq -r '.[]' <<< "$artifact_ids")
+          elif [[ "$PROJECT_TYPE" == "single" ]]; then
+            cp target/*.jar "$dist"/ 2>/dev/null || true
+            if ! ls "$dist"/*.jar > /dev/null 2>&1; then
+              while IFS= read -r jar; do
+                is_release_distribution "$jar" || continue
+                cp "$jar" "$dist"/ 2>/dev/null || true
+              done < <(find . -type f -name '*.jar' -path '*/target/*' ! -path '*/target/*/*')
+            fi
+          else
+            echo "::error title=Undeclared release artifacts::This reactor publishes no package list, so the jars to attach cannot be inferred. Declare release.artifacts in .github/inditextech-ci-java.json."
+            exit 1
           fi
 
           if ! ls "$dist"/*.jar > /dev/null 2>&1; then
@@ -825,6 +1170,16 @@ jobs:
               exit 1
               ;;
           esac
+          case "${WORKING_DIRECTORY:-}" in
+            ""|/*|..|../*|*/..|*/../*)
+              echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
+            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+            exit 1
+          fi
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Set up workflow Java
@@ -868,13 +1223,14 @@ jobs:
 
       - name: Promote the release to the default branch
         id: promote
-        if: needs.prepare-release.outputs.lifecycle_mode != 'delegated' && (needs.build-distributions.result == 'success' || needs.build-distributions.result == 'skipped')
+        if: needs.build-distributions.result == 'success' || needs.build-distributions.result == 'skipped'
         env:
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           EXPECTED_REF: ${{ needs.prepare-release.outputs.expected_ref }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASES: ${{ needs.prepare-release.outputs.releases }}
           RELEASE_COMMIT: ${{ needs.prepare-release.outputs.release_commit }}
+          PROMOTE_COMMIT: ${{ needs.prepare-release.outputs.promote_commit }}
           STAGING_REF: ${{ needs.prepare-release.outputs.staging_ref }}
         working-directory: ${{ env.WORKING_DIRECTORY }}
         shell: bash
@@ -885,13 +1241,13 @@ jobs:
           git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
 
           git fetch --no-tags origin "+${STAGING_REF}:refs/ci-governance/staged" 2>/dev/null || true
-          if [[ "$(git ls-remote origin "$EXPECTED_REF" | cut -f1)" == "$RELEASE_COMMIT" ]]; then
+          if [[ "$(git ls-remote origin "$EXPECTED_REF" | cut -f1)" == "$PROMOTE_COMMIT" ]]; then
             echo "::notice title=Promotion skipped::$EXPECTED_REF already points at the release commit."
             git checkout --force --detach "$RELEASE_COMMIT"
             exit 0
           fi
 
-          if [[ "$(git rev-parse --verify --quiet refs/ci-governance/staged || true)" != "$RELEASE_COMMIT" ]]; then
+          if [[ "$(git rev-parse --verify --quiet refs/ci-governance/staged || true)" != "$PROMOTE_COMMIT" ]]; then
             echo "::error title=Release staging mismatch::$STAGING_REF does not point at the release commit."
             exit 1
           fi
@@ -906,20 +1262,21 @@ jobs:
               echo "::error title=Tag conflict::$tag already exists."
               exit 1
             fi
-            git tag -a "$tag" -m "Release $version"
+            git tag -a "$tag" -m "Release $version" "$RELEASE_COMMIT"
             tag_refs+=("refs/tags/$tag")
           done < <(jq -c '.[]' <<< "$RELEASES")
 
-          # Not forced: a branch that moved during the build fails closed with nothing published.
-          git push --atomic origin "${RELEASE_COMMIT}:${EXPECTED_REF}" "${tag_refs[@]}"
+          git push --atomic origin "${PROMOTE_COMMIT}:${EXPECTED_REF}" "${tag_refs[@]}"
 
       - name: Next development iteration and sync PR
-        if: steps.promote.outcome == 'success' || (needs.prepare-release.outputs.lifecycle_mode == 'delegated' && (needs.build-distributions.result == 'success' || needs.build-distributions.result == 'skipped'))
+        if: steps.promote.outcome == 'success'
         env:
           JAVA_HOME: ${{ steps.jdk.outputs.java_home }}
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           BASELINE_BRANCH: ${{ github.event.pull_request.base.ref || github.ref_name }}
           DEVELOPMENT_FLOW: ${{ vars.DEVELOPMENT_FLOW }}
+          GIT_FLOW_RELEASE_BRANCH: ${{ vars.GIT_FLOW_RELEASE_BRANCH }}
+          GIT_FLOW_DEVELOPMENT_BRANCH: ${{ vars.GIT_FLOW_DEVELOPMENT_BRANCH }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASES: ${{ needs.prepare-release.outputs.releases }}
           RELEASE_COMMIT: ${{ needs.prepare-release.outputs.release_commit }}
@@ -967,7 +1324,18 @@ jobs:
           fi
 
           version="$(jq -r '.[0].version' <<< "$RELEASES")"
-          develop_branch="${BASELINE_BRANCH/main/develop}"
+          if [[ -z "$GIT_FLOW_RELEASE_BRANCH" || -z "$GIT_FLOW_DEVELOPMENT_BRANCH" ]]; then
+            echo "::error title=Missing git-flow branch roles::GIT_FLOW_RELEASE_BRANCH and GIT_FLOW_DEVELOPMENT_BRANCH are required for git-flow release synchronization."
+            exit 1
+          fi
+          if [[ "$BASELINE_BRANCH" == "$GIT_FLOW_RELEASE_BRANCH" ]]; then
+            develop_branch="$GIT_FLOW_DEVELOPMENT_BRANCH"
+          elif [[ "$BASELINE_BRANCH" == "$GIT_FLOW_RELEASE_BRANCH"-* && "$BASELINE_BRANCH" != "$GIT_FLOW_RELEASE_BRANCH"- ]]; then
+            develop_branch="${GIT_FLOW_DEVELOPMENT_BRANCH}${BASELINE_BRANCH#"$GIT_FLOW_RELEASE_BRANCH"}"
+          else
+            echo "::error title=Invalid release branch::${BASELINE_BRANCH} is not a configured release branch."
+            exit 1
+          fi
           if [[ -z "$(git ls-remote --heads origin "$develop_branch")" ]]; then
             echo "::notice title=Sync skipped::$develop_branch does not exist."
             exit 0
@@ -988,6 +1356,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           STAGING_REF: ${{ needs.prepare-release.outputs.staging_ref }}
+          STAGED_TAG_REF: ${{ needs.prepare-release.outputs.staged_tag_ref }}
         working-directory: ${{ env.WORKING_DIRECTORY }}
         shell: bash
         run: |
@@ -996,4 +1365,8 @@ jobs:
             exit 0
           fi
           gh auth setup-git
-          git push origin ":${STAGING_REF}" || true
+          refs=(":${STAGING_REF}")
+          if [[ -n "${STAGED_TAG_REF:-}" ]]; then
+            refs+=(":${STAGED_TAG_REF}")
+          fi
+          git push origin "${refs[@]}"

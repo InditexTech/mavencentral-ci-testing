@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Applied the governed Java profile synchronization after converging the Base
+  and Java archetype sources.
+
+### Fixed
+
+- `maven-release-plugin` now keeps `<pushChanges>false</pushChanges>` so the
+  governed release lane retains control of promotion after a successful build.
+
 ## [0.2.8] - 2026-09-15
 
 ### Changed

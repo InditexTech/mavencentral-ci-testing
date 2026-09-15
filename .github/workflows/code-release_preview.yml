@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      pull-requests: write # Publishes the calculated release preview.
+      pull-requests: write
     steps:
       - name: Check out pull request head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,6 +59,16 @@ jobs:
               exit 1
               ;;
           esac
+          case "${WORKING_DIRECTORY:-}" in
+            ""|/*|..|../*|*/..|*/../*)
+              echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
+            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+            exit 1
+          fi
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Set up workflow Java
@@ -75,7 +85,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Reject any .tool-versions line that is not a strict "<plugin> <version>" before asdf reads it.
           if grep -Evq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+-]+$' .tool-versions; then
             echo "::error title=Invalid tool-versions::${WORKING_DIRECTORY}/.tool-versions is malformed."
             exit 1
@@ -99,14 +108,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Emit the asdf JDK as a step output so the Maven version read uses the consumer JDK (mirrors release-core); other steps keep pinned Java 25.
           echo "java_home=$(asdf where java)" >> "$GITHUB_OUTPUT"
 
       - name: Check CHANGELOG has Unreleased changes
-        # Skip for skip-release PRs and the engine's automated reconcile PR (no release content).
         if: >-
           !contains(github.event.pull_request.labels.*.name, 'skip-release') &&
-          github.event.pull_request.head.ref != 'automated/ci-governance-sync'
+          github.event.pull_request.head.ref != 'automated/ci-governance-sync' &&
+          github.event.pull_request.user.login != 'dependabot[bot]' &&
+          github.event.pull_request.user.login != 'renovate[bot]'
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_EVENT_NUMBER: ${{ github.event.pull_request.number }}
@@ -165,18 +174,21 @@ jobs:
             merge_strategy="Squash and merge"
           fi
 
-          # Maven version helpers (mirror release-core): release version = strip-SNAPSHOT of each unit's POM; the label drives only the next-dev bump.
           artifact_id() {
             printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
           }
           strip_snapshot() { printf '%s' "${1%-SNAPSHOT}"; }
+          # Resolve declared Maven artifactIds through the reactor.
           read_version() {
-            local pom="pom.xml"
-            [[ -n "$1" ]] && pom="$1/pom.xml"
-            mvn -q -B --no-transfer-progress -f "$pom" \
-              help:evaluate -Dexpression=project.version -DforceStdout
+            if [[ -n "$1" ]]; then
+              mvn -q -B --no-transfer-progress -f pom.xml -pl ":$1" \
+                help:evaluate -Dexpression=project.version -DforceStdout
+            else
+              mvn -q -B --no-transfer-progress -f pom.xml \
+                help:evaluate -Dexpression=project.version -DforceStdout
+            fi
           }
-          bump_semver() {  # <X.Y.Z> <major|minor|patch>
+          bump_semver() {
             local major minor patch
             IFS=. read -r major minor patch <<< "$1"
             case "$2" in
@@ -186,7 +198,6 @@ jobs:
             esac
             printf '%s.%s.%s' "$major" "$minor" "$patch"
           }
-          # -------------------------------------------------------------------
 
           if [[ "$PROJECT_TYPE" == "single" ]]; then
             current_version="$(read_version "")"
