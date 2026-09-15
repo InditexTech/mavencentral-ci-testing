@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Validated the governed Maven Central canary release and GitFlow return path
+  after converging the Base and Java archetype sources.
+
 ## [0.2.7] - 2026-09-11
 
 ### Fixed
