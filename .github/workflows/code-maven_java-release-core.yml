@@ -6,8 +6,48 @@ name: code-maven-java-release-core
 on:
   workflow_call:
     inputs:
+      phase:
+        description: Release lifecycle phase to execute.
+        required: false
+        type: string
+        default: prepare
+      promote:
+        description: Whether successful external publication authorizes promotion.
+        required: false
+        type: boolean
+        default: false
       release_type:
         description: Optional release type supplied by the fixed release workflow.
+        required: false
+        type: string
+        default: ''
+      release_commit:
+        description: Prepared release commit supplied to the finalize phase.
+        required: false
+        type: string
+        default: ''
+      promote_commit:
+        description: Prepared next-development commit supplied to the finalize phase.
+        required: false
+        type: string
+        default: ''
+      releases:
+        description: Prepared release records supplied to the finalize phase.
+        required: false
+        type: string
+        default: '[]'
+      expected_ref:
+        description: Baseline ref expected by the finalize phase.
+        required: false
+        type: string
+        default: ''
+      staging_ref:
+        description: Run-scoped staging ref supplied to the finalize phase.
+        required: false
+        type: string
+        default: ''
+      staged_tag_ref:
+        description: Run-scoped staged tag ref supplied to the finalize phase.
         required: false
         type: string
         default: ''
@@ -15,9 +55,21 @@ on:
       release_commit:
         description: Immutable commit used to build the release artifacts.
         value: ${{ jobs.prepare-release.outputs.release_commit }}
+      promote_commit:
+        description: Prepared next-development commit to promote after publication.
+        value: ${{ jobs.prepare-release.outputs.promote_commit }}
       releases:
         description: JSON array of release tags, versions, module lists, and next-dev versions.
         value: ${{ jobs.prepare-release.outputs.releases }}
+      expected_ref:
+        description: Baseline ref expected by the promotion.
+        value: ${{ jobs.prepare-release.outputs.expected_ref }}
+      staging_ref:
+        description: Run-scoped ref that holds the prepared release.
+        value: ${{ jobs.prepare-release.outputs.staging_ref }}
+      staged_tag_ref:
+        description: Run-scoped ref that holds a delegated release tag.
+        value: ${{ jobs.prepare-release.outputs.staged_tag_ref }}
     secrets:
       APP_PRIVATE_KEY:
         required: true
@@ -36,7 +88,7 @@ jobs:
   prepare-release:
     name: Prepare Release
     if: >-
-      (
+      inputs.phase != 'finalize' && ((
         github.event_name == 'workflow_dispatch'
       ) ||
       (
@@ -48,7 +100,7 @@ jobs:
           contains(join(github.event.pull_request.labels.*.name, ','), 'release-type') ||
           vars.DEVELOPMENT_FLOW == 'trunk-based-development'
         )
-      )
+      ))
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     outputs:
@@ -737,7 +789,7 @@ jobs:
             release:clean release:prepare \
             -DpushChanges=false \
             -DdevelopmentVersion="$NEXT_DEV" \
-            -Darguments="-DskipTests"
+            -Darguments="-DskipTests -DskipEnforceSnapshots"
 
           if [[ -s "$interposer_log" ]]; then
             while IFS= read -r blocked_line; do
@@ -1129,8 +1181,7 @@ jobs:
 
   finalize-release:
     name: Finalize release (promote + next dev)
-    needs: [prepare-release, build-distributions]
-    if: "!cancelled() && needs.prepare-release.result == 'success'"
+    if: inputs.phase == 'finalize' && inputs.promote
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -1223,15 +1274,14 @@ jobs:
 
       - name: Promote the release to the default branch
         id: promote
-        if: needs.build-distributions.result == 'success' || needs.build-distributions.result == 'skipped'
         env:
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
-          EXPECTED_REF: ${{ needs.prepare-release.outputs.expected_ref }}
+          EXPECTED_REF: ${{ inputs.expected_ref }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          RELEASES: ${{ needs.prepare-release.outputs.releases }}
-          RELEASE_COMMIT: ${{ needs.prepare-release.outputs.release_commit }}
-          PROMOTE_COMMIT: ${{ needs.prepare-release.outputs.promote_commit }}
-          STAGING_REF: ${{ needs.prepare-release.outputs.staging_ref }}
+          RELEASES: ${{ inputs.releases }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+          PROMOTE_COMMIT: ${{ inputs.promote_commit }}
+          STAGING_REF: ${{ inputs.staging_ref }}
         working-directory: ${{ env.WORKING_DIRECTORY }}
         shell: bash
         run: |
@@ -1278,8 +1328,8 @@ jobs:
           GIT_FLOW_RELEASE_BRANCH: ${{ vars.GIT_FLOW_RELEASE_BRANCH }}
           GIT_FLOW_DEVELOPMENT_BRANCH: ${{ vars.GIT_FLOW_DEVELOPMENT_BRANCH }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          RELEASES: ${{ needs.prepare-release.outputs.releases }}
-          RELEASE_COMMIT: ${{ needs.prepare-release.outputs.release_commit }}
+          RELEASES: ${{ inputs.releases }}
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
         working-directory: ${{ env.WORKING_DIRECTORY }}
         shell: bash
         run: |
@@ -1355,9 +1405,82 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          STAGING_REF: ${{ inputs.staging_ref }}
+          STAGED_TAG_REF: ${{ inputs.staged_tag_ref }}
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${STAGING_REF:-}" ]]; then
+            exit 0
+          fi
+          gh auth setup-git
+          refs=(":${STAGING_REF}")
+          if [[ -n "${STAGED_TAG_REF:-}" ]]; then
+            refs+=(":${STAGED_TAG_REF}")
+          fi
+          git push origin "${refs[@]}"
+
+  discard-unbuilt-staging:
+    name: Discard failed build staging refs
+    needs: [prepare-release, build-distributions]
+    if: >-
+      !cancelled() &&
+      inputs.phase == 'prepare' &&
+      needs.prepare-release.result == 'success' &&
+      needs.build-distributions.result != 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Discard the release staging ref
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           STAGING_REF: ${{ needs.prepare-release.outputs.staging_ref }}
           STAGED_TAG_REF: ${{ needs.prepare-release.outputs.staged_tag_ref }}
-        working-directory: ${{ env.WORKING_DIRECTORY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${STAGING_REF:-}" ]]; then
+            exit 0
+          fi
+          gh auth setup-git
+          refs=(":${STAGING_REF}")
+          if [[ -n "${STAGED_TAG_REF:-}" ]]; then
+            refs+=(":${STAGED_TAG_REF}")
+          fi
+          git push origin "${refs[@]}"
+
+  discard-unpublished-staging:
+    name: Discard unpublished staging refs
+    if: inputs.phase == 'finalize' && !inputs.promote
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Discard the release staging ref
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          STAGING_REF: ${{ inputs.staging_ref }}
+          STAGED_TAG_REF: ${{ inputs.staged_tag_ref }}
         shell: bash
         run: |
           set -euo pipefail
