@@ -1,0 +1,19 @@
+.github/workflows/recover-maven-release.yml
+  s_714bab4bfc90f5::t_db7892e70bd3ab 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b76f7620a6e20c16692290c58eaabbe8aa301d4b",
+  "prompts": {},
+  "sessions": {
+    "s_714bab4bfc90f5": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "s_714bab4bfc90f5",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
