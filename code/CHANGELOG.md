@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Set Maven Release Plugin `pushChanges` to `false` so governed promotion remains
+  the only baseline mutation path.
+
 ## [0.2.8] - 2026-09-15
 
 ### Changed
