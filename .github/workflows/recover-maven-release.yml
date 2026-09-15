@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 INDUSTRIA DE DISEÑO TEXTIL S.A. (INDITEX S.A.)
 # SPDX-License-Identifier: Apache-2.0
 
-name: Recover Maven release 0.2.9
+name: Recover Maven release 0.2.9 finalizer
 
 on:
   workflow_dispatch:
