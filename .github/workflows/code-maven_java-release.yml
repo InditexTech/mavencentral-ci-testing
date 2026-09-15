@@ -7,7 +7,6 @@ run-name: Publish Java release to Maven Central and GitHub from ${{ github.event
 on:
   pull_request:
     types: [closed]
-    branches: [main, main-*]
   workflow_dispatch:
     inputs:
       release_type:
