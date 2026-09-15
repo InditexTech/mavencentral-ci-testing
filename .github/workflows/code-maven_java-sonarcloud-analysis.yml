@@ -73,6 +73,16 @@ jobs:
               exit 1
               ;;
           esac
+          case "${WORKING_DIRECTORY:-}" in
+            ""|/*|..|../*|*/..|*/../*)
+              echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
+            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+            exit 1
+          fi
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Set up workflow Java
@@ -89,7 +99,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Reject any .tool-versions line that is not a strict "<plugin> <version>" before asdf reads it.
           if grep -Evq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+-]+$' .tool-versions; then
             echo "::error title=Invalid tool-versions::${WORKING_DIRECTORY}/.tool-versions is malformed."
             exit 1
@@ -113,7 +122,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Emit the asdf JDK as a step output so only the Maven build uses the consumer JDK; the Sonar scanner keeps the pinned Java 25.
           echo "java_home=$(asdf where java)" >> "$GITHUB_OUTPUT"
 
       - name: Run tests with coverage
@@ -123,7 +131,6 @@ jobs:
           JAVA_HOME: ${{ steps.jdk.outputs.java_home }}
         run: |
           set -euo pipefail
-          # verify compiles + tests and produces the JaCoCo XML the scanner reads (per-module for single, jacoco-report-aggregate for monorepo).
           case "$PROJECT_TYPE" in
             single|monorepo)
               mvn -B --no-transfer-progress -f pom.xml clean verify
@@ -138,7 +145,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Resolve sonar.sources/tests/java.binaries/test.binaries + JaCoCo path from repo root (Java needs sonar.java.binaries); monorepo contributes every member except jacoco-report-aggregate.
+          join_lines() {
+            local joined="" line
+            while IFS= read -r line; do
+              [[ -n "$line" ]] || continue
+              joined="${joined:+${joined},}${line}"
+            done
+            printf '%s' "$joined"
+          }
           case "$PROJECT_TYPE" in
             single)
               sonar_sources="${WORKING_DIRECTORY}/src/main/java"
@@ -148,47 +162,42 @@ jobs:
               sonar_coverage="${WORKING_DIRECTORY}/target/site/jacoco/jacoco.xml"
               ;;
             monorepo)
-              sources=()
-              tests=()
-              binaries=()
-              test_binaries=()
-              for member_dir in "${WORKING_DIRECTORY}"/*/; do
-                member_dir="${member_dir%/}"
-                member_name="$(basename "$member_dir")"
-                # Skip the coverage aggregation helper (no production source, only the aggregated JaCoCo report).
-                if [[ "$member_name" == "jacoco-report-aggregate" ]]; then
+              sonar_sources=""
+              sonar_tests=""
+              sonar_binaries=""
+              sonar_test_binaries=""
+              members_with_sources=0
+              # Find Maven modules at arbitrary reactor depth.
+              while IFS= read -r module_pom; do
+                [[ -n "$module_pom" ]] || continue
+                module_dir="$(dirname "$module_pom")"
+                if [[ "$(basename "$module_dir")" == "jacoco-report-aggregate" ]]; then
                   continue
                 fi
-                # Only Maven modules (a pom.xml is present) are analyzable units.
-                if [[ ! -f "${member_dir}/pom.xml" ]]; then
-                  continue
+                if [[ -d "${module_dir}/src/main/java" ]]; then
+                  members_with_sources=$((members_with_sources + 1))
                 fi
-                if [[ -d "${member_dir}/src/main/java" ]]; then
-                  sources+=("${member_dir}/src/main/java")
+                if [[ -d "${module_dir}/src/main/java" && -d "${module_dir}/target/classes" ]]; then
+                  sonar_sources="${sonar_sources:+${sonar_sources},}${module_dir}/src/main/java"
+                  sonar_binaries="${sonar_binaries:+${sonar_binaries},}${module_dir}/target/classes"
                 fi
-                if [[ -d "${member_dir}/src/test/java" ]]; then
-                  tests+=("${member_dir}/src/test/java")
+                if [[ -d "${module_dir}/src/test/java" && -d "${module_dir}/target/test-classes" ]]; then
+                  sonar_tests="${sonar_tests:+${sonar_tests},}${module_dir}/src/test/java"
+                  sonar_test_binaries="${sonar_test_binaries:+${sonar_test_binaries},}${module_dir}/target/test-classes"
                 fi
-                if [[ -d "${member_dir}/target/classes" ]]; then
-                  binaries+=("${member_dir}/target/classes")
-                fi
-                if [[ -d "${member_dir}/target/test-classes" ]]; then
-                  test_binaries+=("${member_dir}/target/test-classes")
-                fi
-              done
-              if [[ "${#sources[@]}" -eq 0 ]]; then
-                echo "::error title=No monorepo members::No ${WORKING_DIRECTORY}/*/src/main/java directories were found." >&2
+              done < <(find "$WORKING_DIRECTORY" \( -name target -o -name src \) -prune -o -name pom.xml -print | sort)
+              if [[ "$members_with_sources" -eq 0 ]]; then
+                echo "::error title=No monorepo members::No pom.xml module under ${WORKING_DIRECTORY} declares src/main/java." >&2
                 exit 1
               fi
-              if [[ "${#binaries[@]}" -eq 0 ]]; then
-                echo "::error title=No compiled bytecode::No ${WORKING_DIRECTORY}/*/target/classes directories were found; run the build first." >&2
+              if [[ -z "$sonar_binaries" ]]; then
+                echo "::error title=No compiled bytecode::No module under ${WORKING_DIRECTORY} has target/classes; run the build first." >&2
                 exit 1
               fi
-              sonar_sources="$(IFS=,; printf '%s' "${sources[*]}")"
-              sonar_tests="$(IFS=,; printf '%s' "${tests[*]}")"
-              sonar_binaries="$(IFS=,; printf '%s' "${binaries[*]}")"
-              sonar_test_binaries="$(IFS=,; printf '%s' "${test_binaries[*]}")"
-              sonar_coverage="${WORKING_DIRECTORY}/jacoco-report-aggregate/target/site/jacoco-aggregate/jacoco.xml"
+              sonar_coverage="$(find "$WORKING_DIRECTORY" -path '*/target/site/jacoco-aggregate/jacoco.xml' -print | sort | join_lines)"
+              if [[ -z "$sonar_coverage" ]]; then
+                sonar_coverage="${WORKING_DIRECTORY}/jacoco-report-aggregate/target/site/jacoco-aggregate/jacoco.xml"
+              fi
               ;;
             *)
               echo "::error title=Invalid project type::PROJECT_TYPE must be single or monorepo." >&2
