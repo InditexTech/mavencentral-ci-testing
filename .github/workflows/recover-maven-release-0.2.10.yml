@@ -155,17 +155,17 @@ jobs:
               "https://repo1.maven.org/maven2/dev/inditex/${artifact}/0.2.10/${artifact}-0.2.10.pom" \
               > "$pom"
             python3 -c '
-            import sys
-            import xml.etree.ElementTree as etree
+          import sys
+          import xml.etree.ElementTree as etree
 
-            root = etree.parse(sys.argv[1]).getroot()
-            namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
-            artifact_id = root.findtext("m:artifactId", namespaces=namespace)
-            group_id = root.findtext("m:groupId", namespaces=namespace) or root.findtext("m:parent/m:groupId", namespaces=namespace)
-            version = root.findtext("m:version", namespaces=namespace) or root.findtext("m:parent/m:version", namespaces=namespace)
-            if (group_id, artifact_id, version) != ("dev.inditex", sys.argv[2], "0.2.10"):
-                raise SystemExit(f"Unexpected published GAV: {group_id}:{artifact_id}:{version}")
-            ' "$pom" "$artifact"
+          root = etree.parse(sys.argv[1]).getroot()
+          namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
+          artifact_id = root.findtext("m:artifactId", namespaces=namespace)
+          group_id = root.findtext("m:groupId", namespaces=namespace) or root.findtext("m:parent/m:groupId", namespaces=namespace)
+          version = root.findtext("m:version", namespaces=namespace) or root.findtext("m:parent/m:version", namespaces=namespace)
+          if (group_id, artifact_id, version) != ("dev.inditex", sys.argv[2], "0.2.10"):
+              raise SystemExit(f"Unexpected published GAV: {group_id}:{artifact_id}:{version}")
+          ' "$pom" "$artifact"
           done
 
       - name: Restore official tag and GitHub Release
