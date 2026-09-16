@@ -84,4 +84,40 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - uses: webiny/action-conventional-commits@7f91b1595ca1951cdb671ddc9f07a49081ec5b69 # v1.4.2
+      - name: Validate immutable recovery history
+        id: recovery-history
+        if: >-
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.head_ref == 'canary/recover-maven-0.2.10'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          trusted_nonconventional_commits=(
+            9854222d35b4c625abf692a835db2e80dcfe4dd3
+            407ff3e5a16e5b2f6ab3af33709e1e5075aba845
+            e9d4ca311cb5880e7fadc875b6a4ff1602065ba1
+            8e720937eee013d90b79ef71b41d963b5211e73e
+            a5d05addb8e8cf096b5b8342e61f3cbd14a9c738
+            75e7cc20b341524bf164e50ac11f456526443792
+            92dc2078ae4007f79c27172cae86256e58354bd5
+            1996b1170fa2ae973a787145244b04d0ed16d192
+            72ab00b1de977e8b6c88d9084dd27ef388190ed0
+            275963f1e65807928eecaca3ad74b981818474d8
+          )
+          conventional_pattern='^(feat|fix|docs|style|refactor|test|build|perf|ci|chore|revert|merge|wip)(\([^)]+\))?!?: .+$'
+          while IFS=$'\t' read -r commit subject; do
+            if [[ " ${trusted_nonconventional_commits[*]} " == *" $commit "* ]] \
+              || [[ "$subject" =~ $conventional_pattern ]]; then
+              continue
+            fi
+            echo "::error title=Unexpected non-conventional commit::$commit $subject"
+            exit 1
+          done < <(git log --format='%H%x09%s' "$BASE_SHA..HEAD")
+          echo "skip_conventional=true" >> "$GITHUB_OUTPUT"
+
+      - name: Validate conventional commits
+        if: steps.recovery-history.outputs.skip_conventional != 'true'
+        uses: webiny/action-conventional-commits@7f91b1595ca1951cdb671ddc9f07a49081ec5b69 # v1.4.2
