@@ -1,0 +1,19 @@
+.github/workflows/recover-maven-release-0.2.10.yml
+  s_2b7b04d25b778e::t_a51421ad69593c 177,183-185
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9f14eac0b7a3abfa66974486b271018e67ee1987",
+  "prompts": {},
+  "sessions": {
+    "s_2b7b04d25b778e": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "s_2b7b04d25b778e",
+        "model": "unknown"
+      },
+      "human_author": "Recovery Simulation <recovery-simulation@example.invalid>"
+    }
+  }
+}
