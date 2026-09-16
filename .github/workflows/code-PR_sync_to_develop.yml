@@ -7,6 +7,8 @@ on:
     branches: ['main', 'main-*']
     paths-ignore: ['code/**']
 
+permissions: {}
+
 jobs:
   add-friendly-reminder:
     name: Add Friendly Reminder Comment
@@ -44,7 +46,7 @@ jobs:
 
       - name: Checkout
         if: steps.changes.outputs.paths == 'false' && github.event.pull_request.merged == false
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -90,7 +92,7 @@ jobs:
       cancel-in-progress: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
           ref: ${{ github.base_ref }}

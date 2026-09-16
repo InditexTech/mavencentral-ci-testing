@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Enable scheduled dependency updates and pin the sync workflow's third-party actions.
+
 ## [0.2.10] - 2026-09-16
 
 ### Fixed
