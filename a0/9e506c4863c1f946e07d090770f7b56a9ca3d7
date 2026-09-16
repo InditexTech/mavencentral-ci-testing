@@ -1,0 +1,19 @@
+.github/workflows/pr-verify.yml
+  s_18ad3d31fb15c1::t_6766f4816ace90 71,73-74,87-123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a09e506c4863c1f946e07d090770f7b56a9ca3d7",
+  "prompts": {},
+  "sessions": {
+    "s_18ad3d31fb15c1": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "s_18ad3d31fb15c1",
+        "model": "unknown"
+      },
+      "human_author": "Recovery Simulation <recovery-simulation@example.invalid>"
+    }
+  }
+}
