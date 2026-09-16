@@ -1,0 +1,22 @@
+.github/inditextech-ci-sync-manifest.json
+  h_0b2656945e570f 24,35-37,41,63-64
+.github/workflows/code-maven_java-build_snapshot.yml
+  h_0b2656945e570f 273
+.github/workflows/code-maven_java-release-core.yml
+  h_0b2656945e570f 1190-1194,1442-1446,1471,1481-1485,1510
+.github/workflows/code-maven_java-release.yml
+  h_0b2656945e570f 156,167-175
+.github/workflows/pr-verify.yml
+  h_0b2656945e570f 68-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9c3a20c54330e2963e4cf1881a2d9f9db4578946",
+  "prompts": {},
+  "humans": {
+    "h_0b2656945e570f": {
+      "author": "Recovery Simulation <recovery-simulation@example.invalid>"
+    }
+  }
+}
