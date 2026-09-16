@@ -174,13 +174,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: 0.2.10
           RELEASE_COMMIT: 92dc2078ae4007f79c27172cae86256e58354bd5
-          STAGED_TAG_REF: refs/ci-governance/release-tag/35096266784-1
+          STAGED_TAG_OBJECT: 1389fa0e6e23d2d42b83416ee5d3cc77c135c4c0
         run: |
           set -euo pipefail
 
           existing_target="$(git ls-remote --tags origin "refs/tags/${RELEASE_TAG}^{}" | cut -f1)"
           if [[ -z "$existing_target" ]]; then
-            git push origin "${STAGED_TAG_REF}:refs/tags/${RELEASE_TAG}"
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f "ref=refs/tags/${RELEASE_TAG}" \
+              -f "sha=$STAGED_TAG_OBJECT" > /dev/null
             existing_target="$(git ls-remote --tags origin "refs/tags/${RELEASE_TAG}^{}" | cut -f1)"
           fi
           if [[ "$existing_target" != "$RELEASE_COMMIT" ]]; then
