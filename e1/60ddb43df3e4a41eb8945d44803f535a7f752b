@@ -1,0 +1,29 @@
+.github/workflows/pr-verify.yml
+  s_5efe452d324d9d::t_ce4f55b5fa7dd7 72-79
+.github/workflows/recover-maven-release-0.2.10.yml
+  s_cc08f0c3b20455::t_748685e30540cc 47-59,66-68,152-153,156-168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e160ddb43df3e4a41eb8945d44803f535a7f752b",
+  "prompts": {},
+  "sessions": {
+    "s_5efe452d324d9d": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f55c713f3ffeYs7WKR9x1q9g9A",
+        "model": "kimi-k2.7-code"
+      },
+      "human_author": "Recovery Simulation <recovery-simulation@example.invalid>"
+    },
+    "s_cc08f0c3b20455": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "s_cc08f0c3b20455",
+        "model": "unknown"
+      },
+      "human_author": "Recovery Simulation <recovery-simulation@example.invalid>"
+    }
+  }
+}
