@@ -1,0 +1,16 @@
+.github/dependabot.yml
+  h_e3804906c674bd 1-10
+.github/workflows/code-PR_sync_to_develop.yml
+  h_e3804906c674bd 10-11,49,95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0c3c7d6de4bf0da8ee57d598859e2d0530429deb",
+  "prompts": {},
+  "humans": {
+    "h_e3804906c674bd": {
+      "author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
