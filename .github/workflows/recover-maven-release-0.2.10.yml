@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   actions: read
 
 jobs:
@@ -23,9 +23,19 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Create recovery GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+
       - name: Verify immutable recovery inputs
+        id: verify-recovery
         shell: bash
         env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_TAG: 0.2.10
           RELEASE_COMMIT: 92dc2078ae4007f79c27172cae86256e58354bd5
           PROMOTE_COMMIT: 1996b1170fa2ae973a787145244b04d0ed16d192
@@ -52,11 +62,13 @@ jobs:
           if [[ -z "$staging_branch$staged_tag_object$staged_tag_target" ]]; then
             if [[ "$public_tag" == "$RELEASE_COMMIT" && "$public_release" == "$RELEASE_COMMIT" ]]; then
               echo "::notice title=Recovery already finalized::The verified public tag and GitHub Release exist and staging refs were cleaned."
+              echo "already_finalized=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             echo "::error title=Missing staging refs::Recovery is incomplete and its verified staging refs are unavailable."
             exit 1
           fi
+          echo "already_finalized=false" >> "$GITHUB_OUTPUT"
           if [[ "$staging_branch" != "$PROMOTE_COMMIT" \
             || "$staged_tag_object" != "$STAGED_TAG_OBJECT" \
             || "$staged_tag_target" != "$RELEASE_COMMIT" ]]; then
@@ -86,6 +98,7 @@ jobs:
           fi
 
       - name: Download and verify retained release evidence
+        if: steps.verify-recovery.outputs.already_finalized != 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: java-release-source-35096266784-1
@@ -94,6 +107,7 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Validate retained source bundle
+        if: steps.verify-recovery.outputs.already_finalized != 'true'
         shell: bash
         env:
           RELEASE_COMMIT: 92dc2078ae4007f79c27172cae86256e58354bd5
@@ -127,6 +141,7 @@ jobs:
           git -C "$verifier" cat-file -e "$RELEASE_COMMIT^{commit}"
 
       - name: Download and verify retained distributions
+        if: steps.verify-recovery.outputs.already_finalized != 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: java-distributions-0.2.10
@@ -135,6 +150,7 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Verify published coordinates and release assets
+        if: steps.verify-recovery.outputs.already_finalized != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -155,32 +171,35 @@ jobs:
               "https://repo1.maven.org/maven2/dev/inditex/${artifact}/0.2.10/${artifact}-0.2.10.pom" \
               > "$pom"
             python3 -c '
-            import sys
-            import xml.etree.ElementTree as etree
+          import sys
+          import xml.etree.ElementTree as etree
 
-            root = etree.parse(sys.argv[1]).getroot()
-            namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
-            artifact_id = root.findtext("m:artifactId", namespaces=namespace)
-            group_id = root.findtext("m:groupId", namespaces=namespace) or root.findtext("m:parent/m:groupId", namespaces=namespace)
-            version = root.findtext("m:version", namespaces=namespace) or root.findtext("m:parent/m:version", namespaces=namespace)
-            if (group_id, artifact_id, version) != ("dev.inditex", sys.argv[2], "0.2.10"):
-                raise SystemExit(f"Unexpected published GAV: {group_id}:{artifact_id}:{version}")
-            ' "$pom" "$artifact"
+          root = etree.parse(sys.argv[1]).getroot()
+          namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
+          artifact_id = root.findtext("m:artifactId", namespaces=namespace)
+          group_id = root.findtext("m:groupId", namespaces=namespace) or root.findtext("m:parent/m:groupId", namespaces=namespace)
+          version = root.findtext("m:version", namespaces=namespace) or root.findtext("m:parent/m:version", namespaces=namespace)
+          if (group_id, artifact_id, version) != ("dev.inditex", sys.argv[2], "0.2.10"):
+              raise SystemExit(f"Unexpected published GAV: {group_id}:{artifact_id}:{version}")
+          ' "$pom" "$artifact"
           done
 
       - name: Restore official tag and GitHub Release
+        if: steps.verify-recovery.outputs.already_finalized != 'true'
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_TAG: 0.2.10
           RELEASE_COMMIT: 92dc2078ae4007f79c27172cae86256e58354bd5
-          STAGED_TAG_REF: refs/ci-governance/release-tag/35096266784-1
+          STAGED_TAG_OBJECT: 1389fa0e6e23d2d42b83416ee5d3cc77c135c4c0
         run: |
           set -euo pipefail
 
           existing_target="$(git ls-remote --tags origin "refs/tags/${RELEASE_TAG}^{}" | cut -f1)"
           if [[ -z "$existing_target" ]]; then
-            git push origin "${STAGED_TAG_REF}:refs/tags/${RELEASE_TAG}"
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f "ref=refs/tags/${RELEASE_TAG}" \
+              -f "sha=$STAGED_TAG_OBJECT" > /dev/null
             existing_target="$(git ls-remote --tags origin "refs/tags/${RELEASE_TAG}^{}" | cut -f1)"
           fi
           if [[ "$existing_target" != "$RELEASE_COMMIT" ]]; then
@@ -208,8 +227,10 @@ jobs:
             --clobber
 
       - name: Delete verified staging refs
+        if: steps.verify-recovery.outputs.already_finalized != 'true'
         shell: bash
         env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_TAG: 0.2.10
           RELEASE_COMMIT: 92dc2078ae4007f79c27172cae86256e58354bd5
           STAGING_REF: refs/ci-governance/release/35096266784-1
@@ -223,4 +244,8 @@ jobs:
             echo "::error title=Incomplete recovery::The public tag and GitHub Release must both resolve to the verified release commit."
             exit 1
           fi
+          if git config --local --get-all http.https://github.com/.extraheader > /dev/null; then
+            git config --local --unset-all http.https://github.com/.extraheader
+          fi
+          gh auth setup-git
           git push --atomic origin --delete "$STAGING_REF" "$STAGED_TAG_REF"
