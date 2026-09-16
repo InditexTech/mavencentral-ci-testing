@@ -1,0 +1,14 @@
+code/CHANGELOG.md
+  h_e3804906c674bd 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1580ed0dbca91dd4da7303327a05b0286ff9488b",
+  "prompts": {},
+  "humans": {
+    "h_e3804906c674bd": {
+      "author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
