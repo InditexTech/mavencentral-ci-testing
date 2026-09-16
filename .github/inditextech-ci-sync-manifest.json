@@ -21,7 +21,7 @@
   "creation_year": 2026,
   "integrity": {
     "algorithm": "hmac-sha256",
-    "signature": "2de668dc65e0511ba3fd3fdfc6fe86d5c3b3fb8cba850b327b6bd905ab9836b4"
+    "signature": "f44c4638fc0bb1ba19c3bf0cd5df76416ecc464554573a8cc6882541a553382c"
   },
   "managed_by": "InditexTech CI governance",
   "managed_paths": {
@@ -32,9 +32,9 @@
     ".github/PULL_REQUEST_TEMPLATE.md": "23a0b0ac79a9020ccac9c013582a01f86e2df2ae7f914673583b9a3368313041",
     ".github/inditextech-ci-java.json": "0d4f90cc9084617f7cecad0373cb63518c5fc2294c505b4a9ccd3f7642489b37",
     ".github/workflows/code-maven_java-PR_verify.yml": "9d763ae0ab0b6dbcc564b426fda3853da879c6e6c1766267107f0dc296fa9809",
-    ".github/workflows/code-maven_java-build_snapshot.yml": "2afded2f2b2f631e5ed69ceadb2c1f8fc37b8669aeaff30bfac56d4784131930",
-    ".github/workflows/code-maven_java-release-core.yml": "090e04c941186bd8a73eb2cc1a1458df27b46857223e25d351d3bb0aa3ed76a8",
-    ".github/workflows/code-maven_java-release.yml": "5c19d6fbb2bebf9d719490ae1342ab06bceee0144256eeab8e90a87b671a1191",
+    ".github/workflows/code-maven_java-build_snapshot.yml": "a0e2352e2829064fac119de13c11e69ba0339dd18b3ada350b4ffd6c1b92321e",
+    ".github/workflows/code-maven_java-release-core.yml": "8f8d2cb22b25181b07992306e06cf1a62b2dd10f25d2776cbd5733123f7583e9",
+    ".github/workflows/code-maven_java-release.yml": "1f37287b58db9d8d4e27d2e2996e0231300cc765d50e40f9142da77d461def46",
     ".github/workflows/code-maven_java-sonarcloud-analysis.yml": "023af151ca9dfadb39daa8d07fdd631e5d56b1f2a800e10c8031972df3e938e8",
     ".github/workflows/code-release_preview.yml": "73d3b09e770a741a9de6cc250c5e45a29ca0d86f35b6161a946edb075593dc8f",
     ".github/workflows/codeql.yml": "b4ef9dfddd7b28387b669d48a4228225dc1d6dc76f98d21b65dd4a324d228ad5",
@@ -61,6 +61,6 @@
   "schema_version": 2,
   "source_digests": {
     "base": "77bf82cf50d017f83cb2c98448f5abd89c838e085a747c1af3569034f6b38997",
-    "java": "be7847a2cd45a5eb9c37689de16287f4ceeeac7924cf8bc18cd37bc27ffbcfc9"
+    "java": "c3e82cf2257240d177004dbf3167da341797b164374b048dd89681c435f8c802"
   }
 }

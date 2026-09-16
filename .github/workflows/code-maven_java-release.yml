@@ -153,7 +153,7 @@ jobs:
         if: steps.lifecycle.outputs.mode != 'delegated'
         env:
           JAVA_HOME: ${{ steps.jdk.outputs.java_home }}
-        uses: InditexTech/gh-actions/maven-central@058af96d9998ca2187f0a908f6aca1ce0bdbe026 # v1.1.1
+        uses: InditexTech/gh-actions/maven-central@1c2058d59528852dbbbd439ebf0274572aa33114 # v1.1.2
         with:
           working-directory: ${{ vars.WORKING_DIRECTORY }}
           project-type: ${{ env.PROJECT_TYPE }}
