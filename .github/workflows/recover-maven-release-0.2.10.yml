@@ -34,7 +34,7 @@ jobs:
       - name: Verify immutable recovery inputs
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_TAG: 0.2.10
           RELEASE_COMMIT: 92dc2078ae4007f79c27172cae86256e58354bd5
           PROMOTE_COMMIT: 1996b1170fa2ae973a787145244b04d0ed16d192
