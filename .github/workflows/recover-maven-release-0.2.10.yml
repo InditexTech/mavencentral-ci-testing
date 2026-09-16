@@ -41,18 +41,31 @@ jobs:
             exit 1
           fi
 
-          git fetch --no-tags origin \
-            "$STAGING_REF:$STAGING_REF" \
-            "$STAGED_TAG_REF:$STAGED_TAG_REF"
           staging_branch="$(git ls-remote origin "$STAGING_REF" | cut -f1)"
           staged_tag_object="$(git ls-remote origin "$STAGED_TAG_REF" | cut -f1)"
           staged_tag_target="$(git ls-remote origin "${STAGED_TAG_REF}^{}" | cut -f1)"
+          public_tag="$(git ls-remote --tags origin "refs/tags/${RELEASE_TAG}^{}" | cut -f1)"
+          public_release=""
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            public_release="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq '.target_commitish')"
+          fi
+          if [[ -z "$staging_branch$staged_tag_object$staged_tag_target" ]]; then
+            if [[ "$public_tag" == "$RELEASE_COMMIT" && "$public_release" == "$RELEASE_COMMIT" ]]; then
+              echo "::notice title=Recovery already finalized::The verified public tag and GitHub Release exist and staging refs were cleaned."
+              exit 0
+            fi
+            echo "::error title=Missing staging refs::Recovery is incomplete and its verified staging refs are unavailable."
+            exit 1
+          fi
           if [[ "$staging_branch" != "$PROMOTE_COMMIT" \
             || "$staged_tag_object" != "$STAGED_TAG_OBJECT" \
             || "$staged_tag_target" != "$RELEASE_COMMIT" ]]; then
             echo "::error title=Invalid staging refs::Staging refs do not match the failed release provenance."
             exit 1
           fi
+          git fetch --no-tags origin \
+            "$STAGING_REF:$STAGING_REF" \
+            "$STAGED_TAG_REF:$STAGED_TAG_REF"
 
           if ! git merge-base --is-ancestor "$RELEASE_COMMIT" HEAD \
             || ! git merge-base --is-ancestor "$PROMOTE_COMMIT" HEAD; then
@@ -136,10 +149,23 @@ jobs:
               exit 1
             fi
           done
-          for artifact in mavencentral-ci-testing mavencentral-ci-testing-core; do
+          for artifact in mavencentral-ci-testing mavencentral-ci-testing-core jacoco-report-aggregate; do
+            pom="$RUNNER_TEMP/${artifact}-0.2.10.pom"
             curl --fail --silent --show-error \
               "https://repo1.maven.org/maven2/dev/inditex/${artifact}/0.2.10/${artifact}-0.2.10.pom" \
-              | grep -F "<version>0.2.10</version>" > /dev/null
+              > "$pom"
+            python3 -c '
+            import sys
+            import xml.etree.ElementTree as etree
+
+            root = etree.parse(sys.argv[1]).getroot()
+            namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
+            artifact_id = root.findtext("m:artifactId", namespaces=namespace)
+            group_id = root.findtext("m:groupId", namespaces=namespace) or root.findtext("m:parent/m:groupId", namespaces=namespace)
+            version = root.findtext("m:version", namespaces=namespace) or root.findtext("m:parent/m:version", namespaces=namespace)
+            if (group_id, artifact_id, version) != ("dev.inditex", sys.argv[2], "0.2.10"):
+                raise SystemExit(f"Unexpected published GAV: {group_id}:{artifact_id}:{version}")
+            ' "$pom" "$artifact"
           done
 
       - name: Restore official tag and GitHub Release
