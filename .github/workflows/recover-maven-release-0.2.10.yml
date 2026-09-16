@@ -23,6 +23,14 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Create recovery GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+
       - name: Verify immutable recovery inputs
         shell: bash
         env:
@@ -171,7 +179,7 @@ jobs:
       - name: Restore official tag and GitHub Release
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_TAG: 0.2.10
           RELEASE_COMMIT: 92dc2078ae4007f79c27172cae86256e58354bd5
           STAGED_TAG_OBJECT: 1389fa0e6e23d2d42b83416ee5d3cc77c135c4c0
@@ -212,6 +220,7 @@ jobs:
       - name: Delete verified staging refs
         shell: bash
         env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_TAG: 0.2.10
           RELEASE_COMMIT: 92dc2078ae4007f79c27172cae86256e58354bd5
           STAGING_REF: refs/ci-governance/release/35096266784-1
@@ -225,4 +234,8 @@ jobs:
             echo "::error title=Incomplete recovery::The public tag and GitHub Release must both resolve to the verified release commit."
             exit 1
           fi
+          if git config --local --get-all http.https://github.com/.extraheader > /dev/null; then
+            git config --local --unset-all http.https://github.com/.extraheader
+          fi
+          gh auth setup-git
           git push --atomic origin --delete "$STAGING_REF" "$STAGED_TAG_REF"
