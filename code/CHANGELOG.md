@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Validate the delegated Maven Central release path with the current governed
+  publishing action.
+
 ## [0.2.9] - 2026-09-15
 
 ### Fixed
