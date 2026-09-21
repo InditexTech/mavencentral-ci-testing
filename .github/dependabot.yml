@@ -11,3 +11,11 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      # init and analyze are entrypoints of the same github/codeql-action repo
+      # and share one release version; CodeQL rejects a run whose init and
+      # analyze versions differ. Grouping the family forces one PR that bumps
+      # every entrypoint together.
+      codeql-action:
+        patterns:
+          - github/codeql-action/*
