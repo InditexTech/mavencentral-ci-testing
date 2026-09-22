@@ -1,0 +1,21 @@
+.github/workflows/code-maven_java-build_snapshot.yml
+  s_5e175f51cbc632::t_d5eaef05fb70a0 273
+.github/workflows/code-maven_java-release.yml
+  s_5e175f51cbc632::t_c056b5a60d4105 156,167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "66529dbf12558743ba8796695b1eb34f38782d0b",
+  "prompts": {},
+  "sessions": {
+    "s_5e175f51cbc632": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f363f013cffeQ72dNFRLo2I4rE",
+        "model": "zai-org/GLM-5.3-Flash"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
