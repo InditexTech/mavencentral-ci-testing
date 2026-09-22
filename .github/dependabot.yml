@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: INDUSTRIA DE DISEÑO TEXTIL S.A. (INDITEX S.A.)
+# SPDX-License-Identifier: Apache-2.0
+
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: "/code"
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      # init and analyze are entrypoints of the same github/codeql-action repo
+      # and share one release version; CodeQL rejects a run whose init and
+      # analyze versions differ. Grouping the family forces one PR that bumps
+      # every entrypoint together.
+      codeql-action:
+        patterns:
+          - github/codeql-action/*

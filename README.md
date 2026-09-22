@@ -23,11 +23,21 @@ mavencentral-ci-testing/
 │   ├── .tool-versions                        # asdf tool version management (Java, Maven)
 │   ├── CHANGELOG.md                          # Keep a Changelog format
 │   ├── .mvn/settings.xml                    # Maven Central credentials configuration
-│   ├── mavencentral-ci-testing-core/        # Main library module
-│   │   ├── pom.xml
-│   │   └── src/
-│   │       ├── main/java/                   # Library code
-│   │       └── test/java/                   # Unit tests with JaCoCo coverage
+│   ├── libs/                                # Nested library group (scs-outbox layout emulation)
+│   │   ├── pom.xml                          # Intermediate aggregator (packaging pom)
+│   │   ├── mavencentral-ci-testing-core/    # Main library module
+│   │   │   ├── pom.xml
+│   │   │   └── src/
+│   │   │       ├── main/java/               # Library code
+│   │   │       └── test/java/               # Unit tests with JaCoCo coverage
+│   │   └── mavencentral-ci-testing-json/    # Second library module
+│   │       ├── pom.xml
+│   │       └── src/
+│   ├── starters/                            # Nested starter group (scs-outbox layout emulation)
+│   │   ├── pom.xml                          # Intermediate aggregator (packaging pom)
+│   │   └── mavencentral-ci-testing-core-starter/
+│   │       ├── pom.xml
+│   │       └── src/
 │   └── jacoco-report-aggregate/             # Aggregated coverage reports
 │       └── pom.xml                          # maven.deploy.skip=true
 └── .github/
@@ -38,6 +48,28 @@ mavencentral-ci-testing/
         ├── code-maven-sonarcloud-analysis.yml
         └── code-release-preview.yml         # Release preview with version calculation
 ```
+
+## Nested monorepo emulation (scs-outbox layout)
+
+This canary doubles as the **usable example of a delegated monorepo release with
+nested module groups**, mirroring `InditexTech/scs-outbox`'s reactor shape
+(`libs/` and `starters/` intermediate aggregators, publishable members nested
+two levels under `code/`). The Maven coordinates stay the canary's own
+(`dev.inditex:mavencentral-ci-testing-*`).
+
+The release descriptor (`.github/inditextech-ci-java.json`) is therefore:
+
+- `project_type: monorepo`, `release.lifecycle: delegated`, `strategy: locked-step`;
+- `release.packages[]` lists **bare Maven artifactIds**
+  (`mavencentral-ci-testing-core`, `mavencentral-ci-testing-json`,
+  `mavencentral-ci-testing-core-starter`) even though the module directories are
+  nested — the `maven-central` action resolves each artifactId to its unique
+  reactor module directory before publishing.
+
+What must stay true for this shape to release well (verified locally):
+`mvn clean verify` builds the whole reactor; `mvn -pl libs/…,starters/… package`
+is accepted by Maven; the publish-boundary validator emits those same
+reactor-relative paths for `-pl`.
 
 ## Key Features
 
