@@ -1,0 +1,39 @@
+.github/inditextech-ci-java.json
+  s_ac1a8a8a10c614::t_ad359653ce8737 2,5-11
+code/jacoco-report-aggregate/pom.xml
+  s_ac1a8a8a10c614::t_8106ed414485e6 25-34
+code/libs/mavencentral-ci-testing-core/pom.xml
+  s_ac1a8a8a10c614::t_4e2c754c44438e 9
+code/libs/mavencentral-ci-testing-json/pom.xml
+  s_ac1a8a8a10c614::t_bc0075e26c735c 1-33
+code/libs/mavencentral-ci-testing-json/src/main/java/dev/inditex/ci/json/JsonStrings.java
+  s_ac1a8a8a10c614::t_fd241900839dc5 1-69
+code/libs/pom.xml
+  s_ac1a8a8a10c614::t_c5b3b8b260f92c 1-22
+code/pom.xml
+  s_ac1a8a8a10c614::t_3e85b882de8fba 44-45
+code/starters/mavencentral-ci-testing-core-starter/pom.xml
+  s_ac1a8a8a10c614::t_a42d874b0e8091 1-34
+code/starters/mavencentral-ci-testing-core-starter/src/main/java/dev/inditex/ci/starter/CoreStarter.java
+  s_ac1a8a8a10c614::t_ecfd32cd621905 1-29
+code/starters/mavencentral-ci-testing-core-starter/src/test/java/dev/inditex/ci/starter/CoreStarterTest.java
+  s_ac1a8a8a10c614::t_fc0097b32ab652 1-25
+code/starters/pom.xml
+  s_ac1a8a8a10c614::t_778023a9e28eae 1-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fee2142317cb24f1327ef1753013986d5fcfc68e",
+  "prompts": {},
+  "sessions": {
+    "s_ac1a8a8a10c614": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f455bd84effePVDv9G35CWPwaJ",
+        "model": "zai-org/GLM-5.3-Flash"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
