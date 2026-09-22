@@ -1,0 +1,20 @@
+code/pom.xml
+  s_ac1a8a8a10c614::t_0df5e6c30c37ed 54
+  s_ac1a8a8a10c614::t_b9ba253d93de2a 59,62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d790879e8786c1cb345ff1ed02e172af2714ec88",
+  "prompts": {},
+  "sessions": {
+    "s_ac1a8a8a10c614": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f455bd84effePVDv9G35CWPwaJ",
+        "model": "zai-org/GLM-5.3-Flash"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
