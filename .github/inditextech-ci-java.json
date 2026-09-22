@@ -1,8 +1,14 @@
 {
-  "project_type": "single",
+  "project_type": "monorepo",
   "release": {
     "lifecycle": "delegated",
-    "snapshot_publish": true
+    "packages": [
+      "mavencentral-ci-testing-core",
+      "mavencentral-ci-testing-json",
+      "mavencentral-ci-testing-core-starter"
+    ],
+    "snapshot_publish": true,
+    "strategy": "locked-step"
   },
   "schema_version": 1,
   "working_directory": "code"

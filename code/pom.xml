@@ -41,7 +41,8 @@
   </distributionManagement>
 
   <modules>
-    <module>mavencentral-ci-testing-core</module>
+    <module>libs</module>
+    <module>starters</module>
     <module>jacoco-report-aggregate</module>
   </modules>
 
