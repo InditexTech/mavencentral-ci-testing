@@ -1,0 +1,19 @@
+code/CHANGELOG.md
+  s_5e175f51cbc632::t_f4a5a554b56049 14-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5030b10bf06363a2f662c8174f191eadd0732cfd",
+  "prompts": {},
+  "sessions": {
+    "s_5e175f51cbc632": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f363f013cffeQ72dNFRLo2I4rE",
+        "model": "zai-org/GLM-5.3-Flash"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
