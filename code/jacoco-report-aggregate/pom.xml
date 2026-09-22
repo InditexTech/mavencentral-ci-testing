@@ -22,6 +22,16 @@
       <artifactId>mavencentral-ci-testing-core</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>dev.inditex</groupId>
+      <artifactId>mavencentral-ci-testing-json</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.inditex</groupId>
+      <artifactId>mavencentral-ci-testing-core-starter</artifactId>
+      <version>${project.version}</version>
+    </dependency>
   </dependencies>
 
   <build>
