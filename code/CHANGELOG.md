@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Enable scheduled dependency updates and pin the sync workflow's third-party actions.
 - Remove local workflows that are outside the governed CI template contract.
+- Emulate the scs-outbox nested monorepo layout: `libs/` and `starters/`
+  aggregators with three publishable artifacts; the delegated release now
+  publishes `mavencentral-ci-testing-core`, `mavencentral-ci-testing-json`
+  and `mavencentral-ci-testing-core-starter`.
+- Pin `InditexTech/gh-actions/maven-central` to v1.1.5, whose publish
+  selection carries the reactor root and intermediate aggregators so Central
+  receives each POM's complete inheritance chain.
 
 ## [0.2.10] - 2026-09-16
 
