@@ -1,0 +1,19 @@
+code/pom.xml
+  s_16ad186f2d3033::t_b81a15b3371cc0 54-55,67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0cadca341dc429457da9a470e663bf2ed9e3d49d",
+  "prompts": {},
+  "sessions": {
+    "s_16ad186f2d3033": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5a417566-bd6c-4a91-96b8-a5f32ac707af",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
