@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Synchronize the Java CI governance profile: every release commit and tag
+  is now GPG-signed through the shared `configure-release-git` composite.
+- Bump `mockito` to 5.24.0, `slf4j` to 2.0.20 and `maven-enforcer-plugin`
+  to 3.6.3.
+
 ## [0.2.11] - 2026-09-22
 
 ### Changed
