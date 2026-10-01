@@ -21,7 +21,7 @@
   "creation_year": 2026,
   "integrity": {
     "algorithm": "hmac-sha256",
-    "signature": "d6a7a50713acb82302459e0e480a0c1240532483d313ff172742a70f795f1ff0"
+    "signature": "db061ce1aa3166fd2bb335a8a1d360424fe4e191248e1fbe25517dc26ed0dce5"
   },
   "managed_by": "InditexTech CI governance",
   "managed_paths": {
@@ -61,6 +61,6 @@
   "schema_version": 2,
   "source_digests": {
     "base": "d0ba4f054c8e0a0d6c828d02718efc01251f7897cfcbe864d3c76ef304dc4a13",
-    "java": "2820118030545c1133bcb13224efb57edf85bbc7f890f1c09db17f5084475d65"
+    "java": "717b514be76849d15fcc5bc89d0764084720e50d91e7aaecec4ac8af824359ee"
   }
 }
