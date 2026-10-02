@@ -73,6 +73,12 @@ on:
     secrets:
       APP_PRIVATE_KEY:
         required: true
+      CI_GPG_SECRET_KEY:
+        description: Armored GPG secret key signing release commits and tags.
+        required: false
+      CI_GPG_SECRET_KEY_PASSWORD:
+        description: Passphrase protecting CI_GPG_SECRET_KEY.
+        required: false
 
 permissions:
   actions: read
@@ -94,6 +100,7 @@ jobs:
       (
         github.event_name == 'pull_request' &&
         github.event.pull_request.merged &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
         github.event.pull_request.head.ref != 'automated/ci-governance-sync' &&
         !contains(join(github.event.pull_request.labels.*.name, ','), 'skip-release') &&
         (
@@ -220,16 +227,18 @@ jobs:
               exit 1
               ;;
           esac
-          case "${WORKING_DIRECTORY:-}" in
+          workdir="${WORKING_DIRECTORY:-$(jq -r '.working_directory // empty' "$descriptor")}"
+          case "$workdir" in
             ""|/*|..|../*|*/..|*/../*)
               echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
               exit 1
               ;;
           esac
-          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
-            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+          if [[ ! -d "$workdir" ]]; then
+            echo "::error title=Missing working directory::'${workdir}' is not a directory in this checkout." >&2
             exit 1
           fi
+          echo "WORKING_DIRECTORY=${workdir}" >> "$GITHUB_ENV"
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Require pending CHANGELOG entries
@@ -269,7 +278,7 @@ jobs:
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
 
       - name: Set up workflow Java
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: '25.0.2+10.0.LTS'
@@ -585,6 +594,13 @@ jobs:
             rm -f "$tmp"
           fi
 
+      - name: Configure release git signing
+        uses: InditexTech/gh-actions/configure-release-git@ca5ff3f7d69ee5a3cb026ac5585d680f083d8f7b
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          gpg-secret-key: ${{ secrets.CI_GPG_SECRET_KEY }}
+          gpg-passphrase: ${{ secrets.CI_GPG_SECRET_KEY_PASSWORD }}
+
       - name: Commit and stage release
         if: steps.release-plan.outputs.resume != 'true' && steps.lifecycle.outputs.mode != 'delegated'
         id: release-commit
@@ -603,8 +619,6 @@ jobs:
             echo "::error title=Missing release metadata::Versioning did not produce changes to commit."
             exit 1
           fi
-          git config user.name "${APP_SLUG}[bot]"
-          git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
           git commit -m "[java-release] Prepare release"
 
           while IFS= read -r record; do
@@ -715,8 +729,6 @@ jobs:
         run: |
           set -euo pipefail
           gh auth setup-git
-          git config user.name "${APP_SLUG}[bot]"
-          git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
 
           git -C "$GITHUB_WORKSPACE" checkout -B "$BASELINE_BRANCH"
 
@@ -1020,20 +1032,22 @@ jobs:
               exit 1
               ;;
           esac
-          case "${WORKING_DIRECTORY:-}" in
+          workdir="${WORKING_DIRECTORY:-$(jq -r '.working_directory // empty' "$descriptor")}"
+          case "$workdir" in
             ""|/*|..|../*|*/..|*/../*)
               echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
               exit 1
               ;;
           esac
-          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
-            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+          if [[ ! -d "$workdir" ]]; then
+            echo "::error title=Missing working directory::'${workdir}' is not a directory in this checkout." >&2
             exit 1
           fi
+          echo "WORKING_DIRECTORY=${workdir}" >> "$GITHUB_ENV"
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Set up workflow Java
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: '25.0.2+10.0.LTS'
@@ -1226,20 +1240,22 @@ jobs:
               exit 1
               ;;
           esac
-          case "${WORKING_DIRECTORY:-}" in
+          workdir="${WORKING_DIRECTORY:-$(jq -r '.working_directory // empty' "$descriptor")}"
+          case "$workdir" in
             ""|/*|..|../*|*/..|*/../*)
               echo "::error title=Invalid working directory::WORKING_DIRECTORY must be a non-empty relative repository path." >&2
               exit 1
               ;;
           esac
-          if [[ ! -d "$WORKING_DIRECTORY" ]]; then
-            echo "::error title=Missing working directory::'${WORKING_DIRECTORY}' is not a directory in this checkout." >&2
+          if [[ ! -d "$workdir" ]]; then
+            echo "::error title=Missing working directory::'${workdir}' is not a directory in this checkout." >&2
             exit 1
           fi
+          echo "WORKING_DIRECTORY=${workdir}" >> "$GITHUB_ENV"
           echo "PROJECT_TYPE=$project_type" >> "$GITHUB_ENV"
 
       - name: Set up workflow Java
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: '25.0.2+10.0.LTS'
@@ -1277,6 +1293,13 @@ jobs:
           set -euo pipefail
           echo "java_home=$(asdf where java)" >> "$GITHUB_OUTPUT"
 
+      - name: Configure release git signing
+        uses: InditexTech/gh-actions/configure-release-git@ca5ff3f7d69ee5a3cb026ac5585d680f083d8f7b
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          gpg-secret-key: ${{ secrets.CI_GPG_SECRET_KEY }}
+          gpg-passphrase: ${{ secrets.CI_GPG_SECRET_KEY_PASSWORD }}
+
       - name: Promote the release to the default branch
         id: promote
         env:
@@ -1292,8 +1315,6 @@ jobs:
         run: |
           set -euo pipefail
           gh auth setup-git
-          git config user.name "${APP_SLUG}[bot]"
-          git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
 
           git fetch --no-tags origin "+${STAGING_REF}:refs/ci-governance/staged" 2>/dev/null || true
           if [[ "$(git ls-remote origin "$EXPECTED_REF" | cut -f1)" == "$PROMOTE_COMMIT" ]]; then
@@ -1317,7 +1338,7 @@ jobs:
               echo "::error title=Tag conflict::$tag already exists."
               exit 1
             fi
-            git tag -a "$tag" -m "Release $version" "$RELEASE_COMMIT"
+            git tag -s "$tag" -m "Release $version" "$RELEASE_COMMIT"
             tag_refs+=("refs/tags/$tag")
           done < <(jq -c '.[]' <<< "$RELEASES")
 
@@ -1340,8 +1361,6 @@ jobs:
         run: |
           set -euo pipefail
           gh auth setup-git
-          git config user.name "${APP_SLUG}[bot]"
-          git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
 
           descriptor="$GITHUB_WORKSPACE/.github/inditextech-ci-java.json"
           release_mode="$(jq -r '.release.lifecycle // "govern-inject"' "$descriptor")"
