@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-02
+
 ### Fixed
 
 - Converge the drifted governed CI workflows back to the Java profile, so
@@ -139,7 +141,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configured distributionManagement for Maven Central snapshot repository
 - Excluded jacoco-report-aggregate module from deployment
 
-[Unreleased]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.3.0...HEAD
+[Unreleased]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.3.1...HEAD
+
+[0.3.1]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.3.0...0.3.1
 
 [0.3.0]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.2.11...0.3.0
 
