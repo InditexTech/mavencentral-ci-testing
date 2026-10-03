@@ -10,10 +10,16 @@
       "publish"
     ],
     "parameters": {
-      "project_type": "single",
+      "project_type": "monorepo",
       "release": {
         "lifecycle": "delegated",
-        "snapshot_publish": true
+        "packages": [
+          "mavencentral-ci-testing-core",
+          "mavencentral-ci-testing-json",
+          "mavencentral-ci-testing-core-starter"
+        ],
+        "snapshot_publish": true,
+        "strategy": "locked-step"
       },
       "working_directory": "code"
     }
@@ -21,7 +27,7 @@
   "creation_year": 2026,
   "integrity": {
     "algorithm": "hmac-sha256",
-    "signature": "3fedb668ac10271043d43748111736408e90a525c2e0f3ea17ff5e617e08f094"
+    "signature": "a11e1c9da3963b9b58d89499d887130c234f71232a12ae28885c8fe5e51aacf1"
   },
   "managed_by": "InditexTech CI governance",
   "managed_paths": {
@@ -30,7 +36,7 @@
     ".github/ISSUE_TEMPLATE/3-other.yml": "5a839b39a98704036210dee498146f51bd5a6c057228685680e02004ff063a9a",
     ".github/ISSUE_TEMPLATE/config.yml": "10e5dee4d49aa9e7792ceb4c986160c61f95da1ba00a64bf06e5f1f636cd17ec",
     ".github/PULL_REQUEST_TEMPLATE.md": "23a0b0ac79a9020ccac9c013582a01f86e2df2ae7f914673583b9a3368313041",
-    ".github/inditextech-ci-java.json": "0d4f90cc9084617f7cecad0373cb63518c5fc2294c505b4a9ccd3f7642489b37",
+    ".github/inditextech-ci-java.json": "cf678a6ac01d1b5877f37c1eee6aa55f6ab325d9fbedeee5ee953ff1811f6765",
     ".github/workflows/code-maven_java-PR_verify.yml": "6660014f58bb9992ca6dab032f9132ed10ac2b4ea3077e05772e269e36ee7011",
     ".github/workflows/code-maven_java-build_snapshot.yml": "1a1ad850ef059dc6533f76cdebffce89a21fc9c0ee756f91f2e6c617a0d245c7",
     ".github/workflows/code-maven_java-release-core.yml": "a4472ccd2b910aee0b7f863f0e58b04ca4f3a5d1f3f850f3455b2c2d488b5e40",
