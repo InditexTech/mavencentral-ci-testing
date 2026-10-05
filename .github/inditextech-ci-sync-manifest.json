@@ -27,7 +27,7 @@
   "creation_year": 2026,
   "integrity": {
     "algorithm": "hmac-sha256",
-    "signature": "a11e1c9da3963b9b58d89499d887130c234f71232a12ae28885c8fe5e51aacf1"
+    "signature": "74b0a1ca8280dd67b6c198b51b4cb08c50c36183b21863736af742fe3fcb71c1"
   },
   "managed_by": "InditexTech CI governance",
   "managed_paths": {
@@ -58,7 +58,7 @@
     "DEVELOPMENT_FLOW": "git-flow",
     "GIT_FLOW_DEVELOPMENT_BRANCH": "develop",
     "GIT_FLOW_RELEASE_BRANCH": "main",
-    "PROJECT_TYPE": "single",
+    "PROJECT_TYPE": "monorepo",
     "WORKING_DIRECTORY": "code"
   },
   "profile": "java",
