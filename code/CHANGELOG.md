@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Synchronize the Java CI governance profile: the Release Preview of a delegated
+  project now shows the versions that a dry run of the `maven-release-plugin`
+  computes, and the release lanes of non-delegated projects follow the latest
+  reachable release tag.
+
 ## [0.3.1] - 2026-10-02
 
 ### Fixed
