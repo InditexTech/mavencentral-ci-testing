@@ -28,7 +28,7 @@
   "creation_year": 2026,
   "integrity": {
     "algorithm": "hmac-sha256",
-    "signature": "be68f5d4dfc600b2c0139b12d0d54d4f100fbd7920b7716b3e5f7881ff63f821"
+    "signature": "d6c66500e9566918e48ea3a683a20707a523a2dbcdd87ec2af81e1701ef44918"
   },
   "managed_by": "InditexTech CI governance",
   "managed_paths": {
@@ -37,7 +37,7 @@
     ".github/ISSUE_TEMPLATE/3-other.yml": "5a839b39a98704036210dee498146f51bd5a6c057228685680e02004ff063a9a",
     ".github/ISSUE_TEMPLATE/config.yml": "10e5dee4d49aa9e7792ceb4c986160c61f95da1ba00a64bf06e5f1f636cd17ec",
     ".github/PULL_REQUEST_TEMPLATE.md": "23a0b0ac79a9020ccac9c013582a01f86e2df2ae7f914673583b9a3368313041",
-    ".github/dependabot.yml": "1b19694a769c896ca410909ed41f28cd4ef47df8cf3fd168867d7dbe45b1e7b7",
+    ".github/dependabot.yml": "b227f88b52704b964d779f27472f4bfc9ac544346bf36e09dab6a04d31f565c1",
     ".github/inditextech-ci-java.json": "d225bb549a30f1c52cab669d1ee9ceaa2da66da124a52ab7619f4b361023c7ad",
     ".github/workflows/code-maven_java-PR_verify.yml": "6660014f58bb9992ca6dab032f9132ed10ac2b4ea3077e05772e269e36ee7011",
     ".github/workflows/code-maven_java-build_snapshot.yml": "1a1ad850ef059dc6533f76cdebffce89a21fc9c0ee756f91f2e6c617a0d245c7",
