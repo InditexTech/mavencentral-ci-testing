@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-20
+
+### Changed
+
+- Synchronize the Java CI governance profile: the Release Preview of a delegated
+  project now shows the versions that a dry run of the `maven-release-plugin`
+  computes, and the release lanes of non-delegated projects follow the latest
+  reachable release tag.
+
 ## [0.3.1] - 2026-10-02
 
 ### Fixed
@@ -141,7 +150,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configured distributionManagement for Maven Central snapshot repository
 - Excluded jacoco-report-aggregate module from deployment
 
-[Unreleased]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.3.1...HEAD
+[Unreleased]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.3.2...HEAD
+
+[0.3.2]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.3.1...0.3.2
 
 [0.3.1]: https://github.com/InditexTech/mavencentral-ci-testing/compare/0.3.0...0.3.1
 
